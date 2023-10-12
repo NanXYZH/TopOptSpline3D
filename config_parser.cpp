@@ -23,6 +23,14 @@ DEFINE_double(filter_radius, 2, "The filter radius of sensitivity filter");
 
 DEFINE_int32(gridreso, 200, "The grid resolution along alongest axis");
 
+DEFINE_int32(partitionx, 10, "The partition of knot in x-axis");
+
+DEFINE_int32(partitiony, 10, "The partition of knot in y-axis");
+
+DEFINE_int32(partitionz, 10, "The partition of knot in z-axis");
+
+DEFINE_int32(spline_order, 3, "the order of implicit spline");
+
 DEFINE_bool(enable_log, false, "Enable log ");
 
 DEFINE_int32(max_itn, 100, "Maximal iteration number");
@@ -470,12 +478,16 @@ void output_option(void) {
 	std::cout << " =design_step      - - - - - - - - - - - - - - - -   " << FLAGS_design_step << std::endl;
 	std::cout << " =vol_reduction    - - - - - - - - - - - - - - - -   " << FLAGS_vol_reduction << std::endl;
 	std::cout << " =filter_radius    - - - - - - - - - - - - - - - -   " << FLAGS_filter_radius << std::endl;
-	std::cout << " =gridreso         - - - - - - - - - - - - - - - -   " << FLAGS_gridreso << std::endl;;
+	std::cout << " =gridreso         - - - - - - - - - - - - - - - -   " << FLAGS_gridreso << std::endl;
+	std::cout << " =partitionx       - - - - - - - - - - - - - - - -   " << FLAGS_partitionx << std::endl;
+	std::cout << " =partitiony       - - - - - - - - - - - - - - - -   " << FLAGS_partitiony << std::endl;
+	std::cout << " =partitionz       - - - - - - - - - - - - - - - -   " << FLAGS_partitionz << std::endl;
+	std::cout << " =spline_order     - - - - - - - - - - - - - - - -   " << FLAGS_spline_order << std::endl;
 	std::cout << " =enable_log       - - - - - - - - - - - - - - - -   " << (FLAGS_enable_log ? "Yes" : "No") << std::endl;
 	std::cout << " =max_itn          - - - - - - - - - - - - - - - -   " << FLAGS_max_itn << std::endl;
-	std::cout << " =min_density      - - - - - - - - - - - - - - - -   " << FLAGS_min_density << std::endl;;
-	std::cout << " =youngs_module    - - - - - - - - - - - - - - - -   " << FLAGS_youngs_modulus << std::endl;;
-	std::cout << " =poisson_ratio    - - - - - - - - - - - - - - - -   " << FLAGS_poisson_ratio << std::endl;;
+	std::cout << " =min_density      - - - - - - - - - - - - - - - -   " << FLAGS_min_density << std::endl;
+	std::cout << " =youngs_module    - - - - - - - - - - - - - - - -   " << FLAGS_youngs_modulus << std::endl;
+	std::cout << " =poisson_ratio    - - - - - - - - - - - - - - - -   " << FLAGS_poisson_ratio << std::endl;
 	std::cout << " =shell_width      - - - - - - - - - - - - - - - -   " << FLAGS_shell_width << std::endl;
 	std::cout << " =work_mode        - - - - - - - - - - - - - - - -   " << FLAGS_workmode << std::endl;
 	std::cout << " =logdensity       - - - - - - - - - - - - - - - -   " << (FLAGS_logdensity ? "Yes" : "No") << std::endl;

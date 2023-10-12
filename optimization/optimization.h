@@ -5,6 +5,7 @@
 
 
 #include "Grid.h"
+#include <filesystem>
 
 extern grid::HierarchyGrid grids;
 
@@ -19,6 +20,10 @@ struct Parameter {
 	int gridreso;
 	float youngs_modulu;
 	float poisson_ratio;
+	int partitionx;
+	int partitiony;
+	int partitionz;
+	int spline_order;
 };
 
 extern Parameter params;
@@ -32,7 +37,7 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance);
+	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order);
 
 void setOutpurDir(const std::string& dirname);
 

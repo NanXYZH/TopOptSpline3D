@@ -32,7 +32,7 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance
+	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order
 ) {
 	params.volume_ratio = volRatio;
 	params.volume_decrease = volDecrease;
@@ -44,6 +44,10 @@ void setParameters(
 	params.gridreso = gridreso;
 	params.youngs_modulu = youngs_modulu;
 	params.poisson_ratio = poisson_ratio;
+	params.partitionx = partitionx;
+	params.partitiony = partitiony;
+	params.partitionz = partitionz;
+	params.spline_order = spline_order;
 	grids.set_shell_width(shell_width);
 	grids.enable_logdensity(logdensity);
 	grids.enable_logcompliance(logcompliance);
@@ -58,6 +62,18 @@ void setOutpurDir(const std::string& dirname)
 		outdir.push_back('\\');
 	}
 	std::cout << "\033[32m-- Output path \033[0m \n  " << outdir << "\033[0m" << std::endl;
+
+	if (std::filesystem::exists(outdir)) {
+		std::cout << "Folder already exists." << std::endl;
+	}
+	else {
+		if (std::filesystem::create_directory(outdir)) {
+			std::cout << "Folder created successfully." << std::endl;
+		}
+		else {
+			std::cout << "Failed to create folder." << std::endl;
+		}
+	}
 
 	grids.setOutPath(outdir);
 }

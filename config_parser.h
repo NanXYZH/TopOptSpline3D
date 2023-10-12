@@ -37,6 +37,14 @@ DECLARE_double(filter_radius);
 
 DECLARE_int32(gridreso);
 
+DECLARE_int32(partitionx);
+
+DECLARE_int32(partitiony);
+
+DECLARE_int32(partitionz);
+
+DECLARE_int32(spline_order);
+
 DECLARE_bool(enable_log);
 
 DECLARE_int32(max_itn);
