@@ -1125,6 +1125,11 @@ void TestSuit::testDistributeForceOpt(void)
 	grids.writeSupportForce(grids.getPath("fs"));
 
 	initCoeffs(1);
+	// MARK
+	// load to check
+	grids.writeCoeff(grids.getPath("coeff"));
+
+	
 
 #if 1
 	initDensities(params.volume_ratio);

@@ -3130,8 +3130,8 @@ void Grid::init_coeff(double coeff)
 	// MARK
 	// To add
 	int coeff_size = n_im * n_in * n_il;
-	std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
-	init_array(_gbuf.coeff, float(coeff), coeff_size);
+	//std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
+	init_array(_gbuf.coeffs, float(coeff), coeff_size);
 }
 
 __global__ void computeNodePos_kernel(int n_word, int vreso, gBitSAT<unsigned int> vrtsat, devArray_t<double, 3> orig, double eh, devArray_t<double*, 3> pos) {

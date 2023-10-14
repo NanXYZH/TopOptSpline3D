@@ -889,6 +889,58 @@ void grid::HierarchyGrid::writeSensitivity(const std::string& filename)
 
 }
 
+void grid::HierarchyGrid::readCoeff(const std::string& filename)
+{
+	std::vector<int> eidmaphost(_gridlayer[0]->n_elements);
+	gpu_manager_t::download_buf(eidmaphost.data(), _gridlayer[0]->_gbuf.eidmap, sizeof(int) * _gridlayer[0]->n_elements);
+	std::vector<float> rhohost(_gridlayer[0]->n_gselements, 0);
+
+	std::vector<int> epos[3];
+	for (int i = 0; i < 3; i++) epos[i].resize(_gridlayer[0]->n_elements);
+	std::vector<float> evalue;
+	openvdb_wrapper_t<float>::openVDBfile2grid(filename, epos, evalue);
+
+	int ereso = _gridlayer[0]->_ereso;
+	auto& esat = elesatlist[0];
+
+	for (int i = 0; i < epos->size(); i++) {
+		if (epos[0][i] >= ereso || epos[1][i] >= ereso || epos[2][i] >= ereso) {
+			printf("\033[31m-- unmatched grid and file \033[0m\n");
+			exit(-1);
+		}
+		int ebid = epos[0][i] + epos[1][i] * ereso + epos[2][i] * ereso * ereso;
+		int eid = esat(ebid);
+		if (eid == -1 || eid >= eidmaphost.size()) {
+			printf("\033[31m-- unmatched grid and file\033[0m\n");
+			exit(-1);
+		}
+		int egsid = eidmaphost[eid];
+		rhohost[egsid] = evalue[i];
+	}
+
+	gpu_manager_t::upload_buf(_gridlayer[0]->_gbuf.rho_e, rhohost.data(), sizeof(float) * _gridlayer[0]->n_gselements);
+}
+
+
+void grid::HierarchyGrid::writeCoeff(const std::string& filename)
+{
+	int coeff_size = _gridlayer[0]->n_im * _gridlayer[0]->n_in * _gridlayer[0]->n_il;
+	std::vector<float> coeffhost(coeff_size);
+	gpu_manager_t::download_buf(coeffhost.data(), _gridlayer[0]->_gbuf.coeffs, sizeof(float) * coeff_size);
+
+	bio::write_vector(filename, coeffhost);
+
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<double, -1, 1> coeff2host(coeff_size, 1);
+	int f_total = 0;
+	for (int i = 0; i < coeff_size; i++)
+	{
+		coeff2host(i, 1) = coeffhost[i];
+	}
+	eigen2ConnectedMatlab("coeff", coeff2host);
+#endif
+}
+
 void grid::HierarchyGrid::writeComplianceDistribution(const std::string& filename)
 {
 	// compute element compliance
@@ -1662,7 +1714,7 @@ size_t grid::Grid::build(
 	// allocate sensitivity buffer on first grid
 	if (_layer == 0) {
 		_gbuf.g_sens = (float*)gm.add_buf(_name + " g_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
-		_gbuf.coeff = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		_gbuf.coeffs = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 	}
 
 	// allocate bitflag buffer for vertex and element

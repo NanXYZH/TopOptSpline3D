@@ -205,7 +205,7 @@ namespace grid {
 		friend class HierarchyGrid;
 		std::string _name;
 		struct {
-			float* coeff;
+			float* coeffs;
 			float* rho_e;
 			int * v2e[8];
 			int* v2vfine[27];
@@ -391,6 +391,8 @@ namespace grid {
 		double** getResidual(void) { return _gbuf.R; }
 
 		float* getRho(void) { return _gbuf.rho_e; }
+
+		float* getCoeff(void) { return _gbuf.coeffs;  }
 
 		float* getSens(void) { return _gbuf.g_sens; }
 
@@ -683,6 +685,10 @@ namespace grid {
 		void readDensity(const std::string& filename);
 
 		void writeSensitivity(const std::string& filename);
+
+		void readCoeff(const std::string& filename);
+
+		void writeCoeff(const std::string& filename);
 
 		void writeComplianceDistribution(const std::string& filename);
 
