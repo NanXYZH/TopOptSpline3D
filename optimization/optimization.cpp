@@ -48,6 +48,8 @@ void setParameters(
 	params.partitiony = partitiony;
 	params.partitionz = partitionz;
 	params.spline_order = spline_order;
+	grids.set_spline_order(spline_order);
+	grids.set_spline_partition(partitionx, partitiony, partitionz, spline_order);
 	grids.set_shell_width(shell_width);
 	grids.enable_logdensity(logdensity);
 	grids.enable_logcompliance(logcompliance);
@@ -703,6 +705,13 @@ void setBoundaryCondition(std::function<bool(double[3])> fixarea, std::function<
 void initDensities(double rho)
 {
 	grids[0]->init_rho(rho);
+}
+
+void initCoeffs(double coeff)
+{
+	// MARK
+	// To add initialization
+	grids[0]->init_coeff(coeff);
 }
 
 void update_stencil(void)

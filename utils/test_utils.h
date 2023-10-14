@@ -32,6 +32,8 @@ public:
 
 	static void testOrdinaryTopopt(void);
 
+	static void testOrdinarySplineTopopt(void);
+
 	static void testDifferentEigenSolvers(void);
 
 	static void testDifferentInitForce(void);

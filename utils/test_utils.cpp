@@ -659,6 +659,79 @@ void TestSuit::testOrdinaryTopopt(void)
 	bio::write_vector(grids.getPath("vrec"), volRecord);
 }
 
+void TestSuit::testOrdinarySplineTopopt(void)
+{
+	// set force
+	grids[0]->reset_force();
+	setForceSupport(getPreloadForce(), grids[0]->getForce());
+
+	if (!grids.hasSupport()) {
+		forceProject(grids[0]->getForce());
+	}
+
+	grids[0]->force2matlab("fn");
+
+	grids.resetAllResidual();
+	grids[0]->reset_displacement();
+	grids.writeSupportForce(grids.getPath("fs"));
+
+#if 1
+	initDensities(params.volume_ratio);
+	float Vgoal = params.volume_ratio;
+#else
+	initDensities(1);
+	float Vgoal = 1;
+#endif
+
+	int itn = 0;
+
+	snippet::converge_criteria stop_check(1, 5, 1e-3);
+
+	std::vector<double> cRecord, volRecord;
+
+	double Vc = Vgoal - params.volume_ratio;
+
+	std::vector<float> tmodipm;
+
+	while (itn++ < 100) {
+		printf("\n* \033[32mITER %d \033[0m*\n", itn);
+		Vgoal *= (1 - params.volume_decrease);
+		Vc = Vgoal - params.volume_ratio;
+		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
+		// update numeric stencil after density changed
+		update_stencil();
+		// solve displacement 
+		//double c = grids.solveFEM();
+		double rel_res = 1;
+		int femit = 0;
+		while (rel_res > 1e-2 && femit++ < 50) {
+			rel_res = grids.v_cycle(1, 1);
+		}
+		double c = grids[0]->compliance();
+		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
+		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
+		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
+		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
+		grids.log(itn);
+		// compute sensitivity
+		computeSensitivity();
+		// update density
+		updateDensities(Vgoal);
+	}
+
+	printf("\n=   finished   =\n");
+
+	// write result density field
+	grids.writeDensity(grids.getPath("out.vdb"));
+
+	// write worst compliance record during optimization
+	bio::write_vector(grids.getPath("c"), cRecord);
+
+	// write volume record during optimization
+	bio::write_vector(grids.getPath("vrec"), volRecord);
+}
+
+
 std::pair<double, Eigen::VectorXd> SpectraFindLargestEigenPair(const Eigen::MatrixXd& mat) {
 	// construct matrix operation object using the wrapper class DenseSymMatProd
 	Spectra::DenseSymMatProd<double> op(mat);
@@ -1050,6 +1123,8 @@ void TestSuit::testDistributeForceOpt(void)
 	}
 
 	grids.writeSupportForce(grids.getPath("fs"));
+
+	initCoeffs(1);
 
 #if 1
 	initDensities(params.volume_ratio);

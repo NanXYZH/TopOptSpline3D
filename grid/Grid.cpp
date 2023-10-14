@@ -724,6 +724,19 @@ void HierarchyGrid::writeSupportForce(const std::string& filename)
 	bio::write_vectors<double, 3>(filename, hostfs);
 }
 
+void HierarchyGrid::writeForce(const std::string& filename)
+{
+	double* fs[3];
+	Grid::getTempBufArray(fs, 3, _gridlayer[0]->n_gsvertices);
+	getForceSupport(_gridlayer[0]->_gbuf.F, fs);
+	std::vector<double> hostfs[3];
+	for (int i = 0; i < 3; i++) {
+		hostfs[i].resize(_gridlayer[0]->n_gsvertices);
+		gpu_manager_t::download_buf(hostfs[i].data(), fs[i], sizeof(double) * _gridlayer[0]->n_gsvertices);
+	}
+	bio::write_vectors<double, 3>(filename, hostfs);
+}
+
 void HierarchyGrid::writeDensity(const std::string& filename)
 {
 	printf("-- writing vdb to %s\n", filename.c_str());
@@ -1224,6 +1237,18 @@ size_t grid::Grid::_tmp_buf_size = 0;
 
 grid::Mode grid::Grid::_mode;
 
+size_t grid::Grid::n_order = 0;       // The order of implicit spline
+size_t grid::Grid::n_partitionx = 0;  // The number of partition of X,Y,Z direction
+size_t grid::Grid::n_partitiony = 0;
+size_t grid::Grid::n_partitionz = 0;
+size_t grid::Grid::n_im;              // The number of knot series of X,Y,Z direction
+size_t grid::Grid::n_in;
+size_t grid::Grid::n_il;
+size_t grid::Grid::n_knotspanx;       // The number of knot of X,Y,Z direction
+size_t grid::Grid::n_knotspany;
+size_t grid::Grid::n_knotspanz;
+
+
 const std::string& Grid::getOutDir(void)
 {
 	return _outdir;
@@ -1637,6 +1662,7 @@ size_t grid::Grid::build(
 	// allocate sensitivity buffer on first grid
 	if (_layer == 0) {
 		_gbuf.g_sens = (float*)gm.add_buf(_name + " g_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.coeff = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 	}
 
 	// allocate bitflag buffer for vertex and element
@@ -1686,6 +1712,7 @@ void grid::Grid::readForce(std::string forcefile)
 	}
 	if (fhost.size() != n_gsvertices * 3) {
 		printf("\033[31mForce Size does not match\033[0m\n");
+		printf("\033[31mForce Size Load: %i, Force size: %i\033[0m\n", fhost.size() / 3, n_gsvertices);
 		throw std::runtime_error("invalid size");
 	}
 	std::vector<double> f[3];
@@ -1698,6 +1725,49 @@ void grid::Grid::readForce(std::string forcefile)
 	for (int i = 0; i < 3; i++) {
 		gpu_manager_t::upload_buf(_gbuf.F[i], f[i].data(), sizeof(double) * n_gsvertices);
 	}
+
+#if 0
+#ifdef ENABLE_MATLAB
+	Eigem::Matrix<double, -1, 1> fx_tmp;
+	Eigem::Matrix<double, -1, 1> fy_tmp;
+	Eigem::Matrix<double, -1, 1> fz_tmp;
+	fx_tmp.resize(n_gsvertices, 1);
+	fy_tmp.resize(n_gsvertices, 1);
+	fz_tmp.resize(n_gsvertices, 1);
+	std::copy(f[0].begin(), f[0].end(), fx_tmp.begin());
+	std::copy(f[1].begin(), f[1].end(), fy_tmp.begin());
+	std::copy(f[2].begin(), f[2].end(), fz_tmp.begin());
+	eigen2ConnectedMatlab("f_x", fx_tmp);
+	eigen2ConnectedMatlab("f_y", fy_tmp);
+	eigen2ConnectedMatlab("f_z", fz_tmp);
+#endif
+#endif
+
+#ifdef ENABLE_MATLAB
+	std::vector<double> fhos[3];
+	Eigen::Matrix<double, -1, -1> f2fhost(n_gsvertices, 3);
+	for (int i = 0; i < 3; i++) {
+		fhos[i].resize(n_gsvertices);
+		gpu_manager_t::download_buf(fhos[i].data(), _gbuf.F[i], sizeof(double) * n_gsvertices);
+	}
+
+	int f_total = 0;
+	for (int i = 0; i < n_gsvertices; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			f2fhost(i, j) = fhos[j][i];
+			f_total += fhos[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("f", f2fhost);
+#endif
+
+# if 0
+#ifdef ENABLE_MATLAB
+	v3_toMatlab("f2", _gbuf.F);
+#endif // ENABLE_MATLAB
+#endif
 }
 
 void grid::Grid::readSupportForce(std::string fsfile)
@@ -1710,6 +1780,7 @@ void grid::Grid::readSupportForce(std::string fsfile)
 	}
 	if (fhost.size() != n_loadnodes() * 3) {
 		printf("\033[31mForce Size does not match\033[0m\n");
+		printf("\033[31mForce Size Load: %i, Force size: %i\033[0m\n", fhost.size()/3, n_loadnodes());
 		throw std::runtime_error("invalid size");
 	}
 	std::vector<double> f[3];
@@ -1722,6 +1793,47 @@ void grid::Grid::readSupportForce(std::string fsfile)
 	double* pload[3] = { f[0].data(),f[1].data(),f[2].data() };
 	uploadLoadForce(pload);
 	setForceSupport(getPreloadForce(), getForce());
+
+# if 0
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<double, -1, 1> f_x(n_loadnodes(), 1);
+	Eigen::Matrix<double, -1, 1> f_y(n_loadnodes(), 1);
+	Eigen::Matrix<double, -1, 1> f_z(n_loadnodes(), 1);
+	std::copy(f[0].begin(), f[0].end(), f_x.begin());
+	std::copy(f[1].begin(), f[1].end(), f_y.begin());
+	std::copy(f[2].begin(), f[2].end(), f_z.begin());
+
+	eigen2ConnectedMatlab("fs_x", f_x);
+	eigen2ConnectedMatlab("fs_y", f_y);
+	eigen2ConnectedMatlab("fs_z", f_z);
+#endif
+#endif
+
+#ifdef ENABLE_MATLAB
+	std::vector<double> fhos[3];
+	Eigen::Matrix<double, -1, -1> f2fhost(n_loadnodes(), 3);
+	for (int i = 0; i < 3; i++) {
+		fhos[i].resize(n_loadnodes());
+		gpu_manager_t::download_buf(fhos[i].data(), _gbuf.F[i], sizeof(double) * n_loadnodes());
+	}
+
+	int fs_total = 0;
+	for (int i = 0; i < n_loadnodes(); i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			f2fhost(i, j) = fhos[j][i];
+			fs_total += fhos[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("fs", f2fhost);
+#endif
+
+# if 0
+#ifdef ENABLE_MATLAB
+	v3_toMatlab("fs2", _gbuf.F);
+#endif // ENABLE_MATLAB
+#endif
 }
 
 void grid::Grid::readDisplacement(std::string displacementfile)

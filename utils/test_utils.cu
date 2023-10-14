@@ -24,6 +24,11 @@ extern  __constant__ int* gVflag[1];
 extern  __constant__ int* gEflag[1];
 extern  __constant__ int gLayerid[1];
 extern  __constant__ int gDEBUG[1];
+extern  __constant__ int gorder[1];
+extern  __constant__ int gnpartition[3];
+extern  __constant__ int gnbasis[3];
+extern  __constant__ int gnknotspan[3];
+
 
 void TestSuit::setDensity(float* newrho)
 {

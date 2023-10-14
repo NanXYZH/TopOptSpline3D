@@ -179,6 +179,18 @@ namespace grid {
 		static void setOutDir(const std::string& outdir);
 		static const std::string& getOutDir(void);
 		static void* getTempBuf(size_t requre);
+
+		static size_t n_order;       // The order of implicit spline
+		static size_t n_partitionx;  // The number of partition of X,Y,Z direction
+		static size_t n_partitiony;
+		static size_t n_partitionz;
+		static size_t n_im;          // The number of knot series of X,Y,Z direction
+		static size_t n_in;
+		static size_t n_il;
+		static size_t n_knotspanx;   // The number of knot of X,Y,Z direction
+		static size_t n_knotspany;
+		static size_t n_knotspanz;
+
 		template<typename T>
 		static void getTempBufArray(T** pbufs, int n_buf, size_t requre4each) {
 			size_t alignedsize = snippet::Round<512 / sizeof(T)>(requre4each);
@@ -193,6 +205,7 @@ namespace grid {
 		friend class HierarchyGrid;
 		std::string _name;
 		struct {
+			float* coeff;
 			float* rho_e;
 			int * v2e[8];
 			int* v2vfine[27];
@@ -232,6 +245,7 @@ namespace grid {
 		int n_gsvertices = 0;
 		int n_gselements = 0;
 
+		
 		std::map<std::string, double> _keyvalues;
 
 		std::vector<int> _v2v[27];
@@ -440,6 +454,8 @@ namespace grid {
 
 		void init_rho(double rh0);
 
+		void init_coeff(double coeff);
+
 		float volumeRatio(void);
 
 		void use_grid(void);
@@ -542,6 +558,17 @@ namespace grid {
 			int coarse_reso = 32;
 			double shell_width = 0;
 			gpu_manager_t* gmem;
+			int n_order;       // The order of implicit spline
+			int n_partitionx;  // The number of partition of X,Y,Z direction
+			int n_partitiony;
+			int n_partitionz;
+			int n_im;          // The number of knot series of X,Y,Z direction
+			int n_in;
+			int n_il;
+			int n_knotspanx;   // The number of knot of X,Y,Z direction
+			int n_knotspany;
+			int n_knotspanz;
+
 		}_setting;
 
 		int _nlayer = 0;
@@ -607,6 +634,10 @@ namespace grid {
 
 		//void uploadTemplateMatrix(double element_len);
 
+		void set_spline_order(int sorder) { _setting.n_order = sorder;  }
+
+		void set_spline_partition(int spartx, int sparty, int spartz, int sorder);
+
 		void set_prefer_reso(int preferreso) { _setting.prefer_reso = preferreso; }
 
 		void set_coarse_reso(int coarsereso) { _setting.coarse_reso = coarsereso; }
@@ -658,6 +689,8 @@ namespace grid {
 		void writeSupportForce(const std::string& filename);
 
 		void writeDisplacement(const std::string& filename);
+
+		void writeForce(const std::string& filename); // Add
 
 		void getNodePos(Grid& g, std::vector<double>& p3host);
 

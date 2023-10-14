@@ -84,6 +84,8 @@ void uploadTemplateMatrix(void);
 
 void initDensities(double rho);
 
+void initCoeffs(double coeff);
+
 void update_stencil(void);
 
 void test_rigid_displacement(void);

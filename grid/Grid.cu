@@ -39,6 +39,10 @@ __constant__ int* gVflag[1];
 __constant__ int* gEflag[1];
 __constant__ int gLayerid[1];
 __constant__ int gDEBUG[1];
+__constant__ int gorder[1];
+__constant__ int gnpartition[3];
+__constant__ int gnbasis[3];
+__constant__ int gnknotspan[3];
 
 extern __constant__ double* gLoadtangent[2][3];
 extern __constant__ double* gLoadnormal[3];
@@ -2320,6 +2324,43 @@ void HierarchyGrid::setMode(Mode mode)
 	cudaMemcpyToSymbol(gmode, &modeid, sizeof(int));
 }
 
+void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int sorder)
+{
+	int sporder = sorder;
+	cudaMemcpyToSymbol(gorder, &sporder, sizeof(int));
+	cuda_error_check;
+
+	_setting.n_partitionx = spartx;
+	_setting.n_partitiony = sparty;
+	_setting.n_partitionz = spartz;
+	grid::Grid::n_partitionx = spartx;
+	grid::Grid::n_partitiony = sparty;
+	grid::Grid::n_partitionz = spartz;
+	int sppartition[3] = { spartx, sparty, spartz };
+	cudaMemcpyToSymbol(gnpartition, sppartition, sizeof(gnpartition));
+	cuda_error_check;
+
+	_setting.n_im = sorder + spartx;
+	_setting.n_in = sorder + sparty;
+	_setting.n_il = sorder + spartz;
+	Grid::n_im = sorder + spartx;
+	Grid::n_in = sorder + sparty;
+	Grid::n_il = sorder + spartz;
+	int spbasis[3] = { sorder + spartx, sorder + sparty, sorder + spartz };
+	cudaMemcpyToSymbol(gnbasis, spbasis, sizeof(gnbasis));
+	cuda_error_check;
+
+	_setting.n_knotspanx = 2 * sorder + spartx;
+	_setting.n_knotspany = 2 * sorder + sparty;
+	_setting.n_knotspanz = 2 * sorder + spartz;
+	Grid::n_knotspanx = 2 * sorder + spartx;
+	Grid::n_knotspany = 2 * sorder + sparty;
+	Grid::n_knotspanz = 2 * sorder + spartz;
+	int spknotspan[3] = { 2 * sorder + spartx, 2 * sorder + sparty, 2 * sorder + spartz };
+	cudaMemcpyToSymbol(gnknotspan, spknotspan, sizeof(gnknotspan));
+	cuda_error_check;
+}
+
 template<typename WeightRadius>
 __global__ void filterSensitivity_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, const float* g_sens, float* g_dst, float Rfilter, WeightRadius fr, const int* eidmap) {
 	int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -3082,6 +3123,15 @@ void Grid::setV2V_g(int vreso, BitSAT<unsigned int>& vrtsat, int* v2v[27])
 void Grid::init_rho(double rh0)
 {
 	init_array(_gbuf.rho_e, float(rh0), n_rho());
+}
+
+void Grid::init_coeff(double coeff)
+{
+	// MARK
+	// To add
+	int coeff_size = n_im * n_in * n_il;
+	std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
+	init_array(_gbuf.coeff, float(coeff), coeff_size);
 }
 
 __global__ void computeNodePos_kernel(int n_word, int vreso, gBitSAT<unsigned int> vrtsat, devArray_t<double, 3> orig, double eh, devArray_t<double*, 3> pos) {

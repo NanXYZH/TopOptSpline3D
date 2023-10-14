@@ -73,7 +73,7 @@ void MatlabEngine::eval(const std::string &cmd)
     }
 
     if (consoleOutput && *engBuffer) {
-        fprintf(stdout, "--------------\n%s\n--------------\n%s\n", cmd.c_str(), engBuffer);
+        fprintf(stdout, "--------------\n%s\n--------------\n%s\n", cmd.c_str(), engBuffer);;
 	}
 }
 
