@@ -299,6 +299,9 @@ void TestSuit::testMain(const std::string& testname)
 	else if (testname == "testordtop") {
 		testOrdinaryTopopt();
 	}
+	else if (testname == "testordsplinetop") {
+		testOrdinarySplineTopopt();
+	}
 	else if (testname == "testdistributeforce") {
 		testDistributeForceOpt();
 	}
@@ -675,7 +678,13 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	grids[0]->reset_displacement();
 	grids.writeSupportForce(grids.getPath("fs"));
 
-#if 1
+	initCoeffs(1);
+	// MARK
+	// load to check
+	grids.writeCoeff(grids.getPath("coeff"));
+
+
+#if 1	
 	initDensities(params.volume_ratio);
 	float Vgoal = params.volume_ratio;
 #else
@@ -1123,13 +1132,6 @@ void TestSuit::testDistributeForceOpt(void)
 	}
 
 	grids.writeSupportForce(grids.getPath("fs"));
-
-	initCoeffs(1);
-	// MARK
-	// load to check
-	grids.writeCoeff(grids.getPath("coeff"));
-
-	
 
 #if 1
 	initDensities(params.volume_ratio);

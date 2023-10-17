@@ -222,6 +222,7 @@ namespace grid {
 			int nword_ebits;
 
 			float* g_sens;
+			float* c_sens;
 
 			/*
 			  |_*_|_*_|_*_| * | * | * | * | * |
@@ -527,6 +528,7 @@ namespace grid {
 		int n_nodes(void) { return n_gsvertices; }
 		int n_valid_elements(void) { return n_elements; }
 		int n_rho(void) { return n_gselements; }
+		int n_cijk(void) { return n_im * n_in * n_il; }
 		double v3norm(double* v[3]);
 
 		void v3_create(double* dstv[3]);

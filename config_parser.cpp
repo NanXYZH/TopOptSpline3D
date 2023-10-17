@@ -400,12 +400,15 @@ void config_parser_t::parse_benchmark_configuration(const std::string& filename)
 	if (doc.HasMember(term)) {
 		if (!doc[term].IsArray()) { printf("\033[31mError occurred in json parsing : loadarea should be a set of region desc [{xxx},{xxx}...] !\033[0m"); exit(0); }
 		auto loadRegionDescList = doc[term].GetArray();
-		std::cout << "[Json] adding load region..." << std::endl;
+		std::cout << "[Json] adding load region...";
+		int counter = 0;
 		for (auto itr = loadRegionDescList.Begin(); itr != loadRegionDescList.End(); itr++) {
 			if (!itr->IsObject()) { printf("\033[31mError occurred in json parsing : an area should be a object {xxx} !\033[0m"); exit(0); }
 			auto region = itr->GetObject();
 			_parse_one_region_to_union(region, loadArea);
+			counter++;
 		}
+		std::cout << counter << " area" << std::endl;
 	}
 
 	// deal with force field
