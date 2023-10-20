@@ -678,9 +678,11 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	grids[0]->reset_displacement();
 	grids.writeSupportForce(grids.getPath("fs"));
 
-	initCoeffs(1);
-	// MARK
-	// load to check
+	grids.testShell();
+	grids.writeNodePos(grids.getPath("nodepos"), *grids[0]);
+
+	// MARK: ADD user-defined input
+	initCoeffs(1);		
 	grids.writeCoeff(grids.getPath("coeff"));
 
 
@@ -692,6 +694,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	float Vgoal = 1;
 #endif
 
+	grids.writeDensityac(grids.getPath("density_test"));
 	int itn = 0;
 
 	snippet::converge_criteria stop_check(1, 5, 1e-3);
@@ -717,6 +720,9 @@ void TestSuit::testOrdinarySplineTopopt(void)
 			rel_res = grids.v_cycle(1, 1);
 		}
 		double c = grids[0]->compliance();
+
+		grids.writeDisplacement(grids.getPath("ulast"));
+
 		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
 		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
@@ -1955,6 +1961,7 @@ void TestSuit::test2019(void)
 
 extern void stressAndComplianceOnVertex_impl(double elen, const std::vector<int>& vlexid, const std::vector<glm::vec4>& inclusionPos, std::vector<double>& clist, std::vector<double>& vonlist);
 
+// compute the stress and compliance on model surface
 void TestSuit::stressAndComplianceOnVertex(const std::vector<glm::vec4>& p4list, std::vector<double>& clist, std::vector<double>& vonlist)
 {
 	auto& vsat = grids.vrtsatlist[0];

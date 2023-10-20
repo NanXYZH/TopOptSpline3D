@@ -46,6 +46,29 @@ void Cal_Normal_3D(const Vec3d& v1, const Vec3d& v2, const Vec3d& v3, Vec3d& vn)
 
 int main()
 {
+	int num = 42;
+	int width = 10;
+	printf("Integer number: %*d, %*d\n", width, num, width, num + 1);
+
+	unsigned int flag = 0; // 初始化为0，所有位都是0
+
+	// 设置特定位
+	int positionToSet = 15;
+	flag |= (1u << positionToSet);
+
+	// 清除特定位
+	int positionToClear = 2;
+	flag &= ~(1u << positionToClear);
+
+	// 检查特定位
+	int positionToCheck = 3;
+	bool isSet = (flag & (1u << positionToCheck)) != 0;
+
+	std::cout << "Size of unsigned int: " << sizeof(unsigned int) * 8 << " bits" << std::endl;
+	std::cout << "Flag: " << flag << std::endl;
+	std::cout << "Is bit " << positionToCheck << " set? " << isSet << std::endl;
+
+
 	Vec3d v1(-14.411007249513272, 6.6273702236878158, 0.0);
 	Vec3d v2(-14.411007249513272, 6.6273702236878158, 1.0);
 	Vec3d v3(-14.411007249513272, 7.6273702236878158, 0.0);

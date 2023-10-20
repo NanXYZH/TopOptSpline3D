@@ -290,7 +290,14 @@ namespace grid {
 			offset_supportnodes = 19,
 
 			mask_surfaceelements = 0b100000000000000000000,
-			offset_surfaceelements = 20
+			offset_surfaceelements = 20,
+
+			mask_modelnodes = 0b1000000000000000000000,
+			offset_modelnodes = 21,
+
+			mask_modelelements = 0b10000000000000000000000,
+			offser_modelelements = 22
+
 		};
 
 		int _layer = 0;
@@ -526,6 +533,8 @@ namespace grid {
 		void v2vcoarse2matlab(const std::string& nam);
 	public:
 		int n_nodes(void) { return n_gsvertices; }
+		int n_eles(void) { return n_gselements;  }
+		int n_valid_nodes(void) { return n_vertices; }
 		int n_valid_elements(void) { return n_elements; }
 		int n_rho(void) { return n_gselements; }
 		int n_cijk(void) { return n_im * n_in * n_il; }
@@ -619,6 +628,10 @@ namespace grid {
 
 		void setSolidShellElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags);
 
+		void setinModelVertice(const std::vector<unsigned int>& vbitfine, BitSAT<unsigned int>& esat, float box[2][3], int vreso, std::vector<int>& vflags);
+
+		void setinModelElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags);
+
 		void testShell(void);
 
 		void fillShell(void);
@@ -684,6 +697,8 @@ namespace grid {
 
 		void writeDensity(const std::string& filename);
 
+		void writeDensityac(const std::string& filename);
+
 		void readDensity(const std::string& filename);
 
 		void writeSensitivity(const std::string& filename);
@@ -701,6 +716,8 @@ namespace grid {
 		void writeForce(const std::string& filename); // Add
 
 		void getNodePos(Grid& g, std::vector<double>& p3host);
+
+		void getElementPos(Grid& g, std::vector<double>& p3host);
 
 		void update_stencil(void);
 

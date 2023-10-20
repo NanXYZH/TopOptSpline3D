@@ -128,13 +128,169 @@ void HierarchyGrid::setSolidShellElement(const std::vector<unsigned int>& ebitfi
 
 	printf("-- found %d shell elements\n", shellelements.size());
 
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<int, -1, -1> eflag1(shellelements.size(), 1);
+	Eigen::Matrix<int, -1, -1> eflag2(shellelements.size(), 1);
+
 	for (auto iter = shellelements.begin(); iter != shellelements.end(); iter++) {
 		int oldword = eflags[*iter];
+		eflag1(*iter, 1) = oldword;
 		oldword |= int(Grid::Bitmask::mask_shellelement);
+		eflag2(*iter, 1) = oldword;
+		eflags[*iter] = oldword;
+	}
+
+	eigen2ConnectedMatlab("eflag1", eflag1);
+	eigen2ConnectedMatlab("eflag2", eflag2);
+#endif
+
+}
+
+void HierarchyGrid::setinModelVertice(const std::vector<unsigned int>& vbitfine, BitSAT<unsigned int>& vsat, float box[2][3], int ereso, std::vector<int>& vflags) {
+	std::vector<CGMesh::Face_index> fidlist;
+	for (auto iter = cmesh.faces_begin(); iter != cmesh.faces_end(); iter++) {
+		fidlist.emplace_back(*iter);
+	}
+	int vreso = ereso + 1;
+	double eh = (box[1][0] - box[0][0]) / ereso;
+
+	printf("-- vertice size h = %lf (%d)\n", eh, vreso);
+
+	std::set<int> shellelements;
+
+	double wshell = _setting.shell_width * eh;
+
+	printf("-- shell width %lf \n", wshell);
+
+	double sh2 = pow(wshell, 2);
+
+#pragma omp parallel for
+	for (int i = 0; i < fidlist.size(); i++) {
+		Point fv[3];
+		int counter = 0;
+		for (auto v : cmesh.vertices_around_face(cmesh.halfedge(fidlist[i]))) {
+			fv[counter++] = cmesh.point(v);
+		}
+		auto fbb = PMP::face_bbox(fidlist[i], cmesh);
+		int lid[3], rid[3];
+		for (int j = 0; j < 3; j++) {
+			lid[j] = (fbb.min_coord(j) - wshell * 1.3 - box[0][j] - 0.5 * eh) / eh;
+			rid[j] = (fbb.max_coord(j) + wshell * 1.3 - box[0][j] - 0.5 * eh) / eh + 1;
+			lid[j] = std::clamp(lid[j], 0, ereso - 1);
+			rid[j] = std::clamp(rid[j], 0, ereso - 1);
+		}
+		double ec[3];
+		std::vector<int> eidshell;
+
+		for (int x = lid[0]; x < rid[0]; x++) {
+			ec[0] = (x + 0.5) * eh + box[0][0];
+			for (int y = lid[1]; y < rid[1]; y++) {
+				ec[1] = (y + 0.5) * eh + box[0][1];
+				for (int z = lid[2]; z < rid[2]; z++) {
+					ec[2] = (z + 0.5) * eh + box[0][2];
+					double d = aabb_tree.squared_distance(Point(ec[0], ec[1], ec[2]));
+					if (d < sh2) {
+						int ebid = x + y * ereso + z * ereso * ereso;
+						int eid = vsat(ebid);
+						if (eid != -1) {
+							eidshell.emplace_back(eid);
+						}
+					}
+				}
+			}
+		}
+#pragma omp critical
+		{
+			for (int i = 0; i < eidshell.size(); i++) {
+				shellelements.insert(eidshell[i]);
+			}
+		}
+	}
+
+	printf("-- found %d Model vertices\n", shellelements.size());
+
+	for (auto iter = shellelements.begin(); iter != shellelements.end(); iter++) {
+		int oldword = vflags[*iter];
+		oldword |= int(Grid::Bitmask::mask_modelnodes);
+		vflags[*iter] = oldword;
+	}
+
+}
+
+
+void HierarchyGrid::setinModelElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags) {
+	std::vector<CGMesh::Face_index> fidlist;
+	for (auto iter = cmesh.faces_begin(); iter != cmesh.faces_end(); iter++) {
+		fidlist.emplace_back(*iter);
+	}
+
+	double eh = (box[1][0] - box[0][0]) / ereso;
+
+	printf("-- element size h = %lf (%d)\n", eh, ereso);
+
+	std::set<int> shellelements;
+
+	double wshell = _setting.shell_width * eh;
+
+	printf("-- shell width %lf \n", wshell);
+
+	double sh2 = pow(wshell, 2);
+
+#pragma omp parallel for
+	for (int i = 0; i < fidlist.size(); i++) {
+		Point fv[3];
+		int counter = 0;
+		for (auto v : cmesh.vertices_around_face(cmesh.halfedge(fidlist[i]))) {
+			fv[counter++] = cmesh.point(v);
+		}
+		auto fbb = PMP::face_bbox(fidlist[i], cmesh);
+		int lid[3], rid[3];
+		for (int j = 0; j < 3; j++) {
+			lid[j] = (fbb.min_coord(j) - wshell * 1.3 - box[0][j] - 0.5 * eh) / eh;
+			rid[j] = (fbb.max_coord(j) + wshell * 1.3 - box[0][j] - 0.5 * eh) / eh + 1;
+			lid[j] = std::clamp(lid[j], 0, ereso - 1);
+			rid[j] = std::clamp(rid[j], 0, ereso - 1);
+		}
+		double ec[3];
+		std::vector<int> eidshell;
+
+		for (int x = lid[0]; x < rid[0]; x++) {
+			ec[0] = (x + 0.5) * eh + box[0][0];
+			for (int y = lid[1]; y < rid[1]; y++) {
+				ec[1] = (y + 0.5) * eh + box[0][1];
+				for (int z = lid[2]; z < rid[2]; z++) {
+					ec[2] = (z + 0.5) * eh + box[0][2];
+					double d = aabb_tree.squared_distance(Point(ec[0], ec[1], ec[2]));
+					if (d < sh2) {
+						int ebid = x + y * ereso + z * ereso * ereso;
+						int eid = esat(ebid);
+						if (eid != -1) {
+							eidshell.emplace_back(eid);
+						}
+					}
+				}
+			}
+		}
+#pragma omp critical
+		{
+			for (int i = 0; i < eidshell.size(); i++) {
+				shellelements.insert(eidshell[i]);
+			}
+		}
+	}
+
+	printf("-- found %d Model elements\n", shellelements.size());
+
+	for (auto iter = shellelements.begin(); iter != shellelements.end(); iter++) {
+		int oldword = eflags[*iter];
+		oldword |= int(Grid::Bitmask::mask_modelelements);
 		eflags[*iter] = oldword;
 	}
 
 }
+
+
+
 
 void HierarchyGrid::testShell(void)
 {
@@ -167,7 +323,8 @@ void grid::HierarchyGrid::log(int itn)
 	if (_logFlag & mask_log_density) {
 		sprintf_s(fn, "density%04d.vdb", itn);
 		printf("-- writing density to %s\n", fn);
-		writeDensity(getPath(fn));
+		//writeDensity(getPath(fn));
+		writeDensityac(getPath(fn));
 	}
 	if (_logFlag & mask_log_compliance) {
 		sprintf_s(fn, "compliance%04d.vdb", itn);
@@ -190,17 +347,41 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 
 	//for (int i = 0; i < facevertices.size(); i++) std::cout << facevertices[i] << std::endl;
 
-	std::vector<unsigned int> solid_bit;
+	std::vector<unsigned int> solid_bit; // elements info (in solid or not)
+
 	int out_reso[3];
 	float out_box[2][3];
 
 	auto voxInfo = voxelize_mesh(pcoords, facevertices, _setting.prefer_reso, solid_bit, out_reso, out_box);
 	//write_obj_cubes(solid_bit.data(), voxInfo, "voxels.obj");
 
+#if 0
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<int, -1, 1> solid_bit_(solid_bit.size(), 1);
+	for (int i = 0; i < solid_bit.size(); i++)
+	{
+		solid_bit_(i, 1) = solid_bit[i];
+	}
+	eigen2ConnectedMatlab("solid_bit1", solid_bit_);
+#endif
+
+#endif
+
 	// The bits in a word are listed starting from high order in voxelizer, so we reverse the bits in all words 
 	wordReverse_g(solid_bit.size(), solid_bit.data());
 
-	std::vector<unsigned int> inci_vbit;
+#if 0
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<int, -1, 1> solid_bit2(solid_bit.size(), 1);
+	for (int i = 0; i < solid_bit.size(); i++)
+	{
+		solid_bit2(i, 1) = solid_bit[i];
+	}
+	eigen2ConnectedMatlab("solid_bit2", solid_bit2);
+#endif
+#endif
+
+	std::vector<unsigned int> inci_vbit; // vertices info (in solid or not)
 	
 	int nfineelements = out_reso[0] * out_reso[1] * out_reso[2];
 	
@@ -209,8 +390,8 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 	int nfinevertices = vreso[0] * vreso[1] * vreso[2];
 
 	//size_t inci_vsize = nfinevertices / (sizeof(unsigned int) * 8) + 1;
-	size_t inci_vsize = snippet::Round<BitCount<unsigned int>::value>(nfinevertices) / BitCount<unsigned int>::value;
-
+	size_t inci_vsize = snippet::Round<BitCount<unsigned int>::value>(nfinevertices) / BitCount<unsigned int>::value; // make sure inci_vsize / 32 == 0
+	
 	//cubeGridSetSolidVertices(out_reso[0], solid_bit, inci_vbit);
 	cubeGridSetSolidVertices_g(out_reso[0], solid_bit, inci_vbit);
 
@@ -225,7 +406,7 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 	std::vector<int> resolist;
 	resolist.emplace_back(reso);
 
-	// set coarse layers solid bits
+	// set coarse layers solid bits (not actual solid elements number, solid elements / 32 = solid bits)
 	while (elesatlist.rbegin()->total() > 400) {
 		int finereso = reso;
 		int finereso2 = pow(reso, 2);
@@ -277,8 +458,9 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 		int nSolidElement = elesat.total();
 		int nSolidVertex = vrtsat.total();
 
-
-		printf("--[%d] total valid vertex %d\n", i, vrtsat.total());
+		//printf("--[%d] total valid vertex %d\n", i, vrtsat.total());
+		int out_width = 10;
+		printf("--[%d] total valid vertex %*d, total element %*d\n", i, out_width, vrtsat.total(), out_width, elesat.total());
 
 		// allocate buffer
 		for (int k = 0; k < 8; k++) {
@@ -381,7 +563,6 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 
 	// find shell elements
 	setSolidShellElement(elesatlist[0]._bitArray, elesatlist[0], out_box, resolist[0], ebitflaglist[0]);
-
 
 	// upload grid to device
 	for (int i = 0; i < elesatlist.size(); i++) {
@@ -536,8 +717,10 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<unsigned int> &solid_bit
 		int nSolidElement = elesat.total();
 		int nSolidVertex = vrtsat.total();
 
+		//printf("--[%d] total valid vertex %*d\n, ", i, vrtsat.total());
 
-		printf("--[%d] total valid vertex %d\n", i, vrtsat.total());
+		int out_width = 10;
+		printf("--[%d] total valid vertex %*d, total element %*d\n ", i, out_width, vrtsat.total(), out_width, elesat.total());
 
 		// allocate buffer
 		for (int k = 0; k < 8; k++) {
@@ -737,6 +920,8 @@ void HierarchyGrid::writeForce(const std::string& filename)
 	bio::write_vectors<double, 3>(filename, hostfs);
 }
 
+
+// id pos
 void HierarchyGrid::writeDensity(const std::string& filename)
 {
 	printf("-- writing vdb to %s\n", filename.c_str());
@@ -775,6 +960,91 @@ void HierarchyGrid::writeDensity(const std::string& filename)
 	
 	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
 }
+
+// actual pos
+void HierarchyGrid::writeDensityac(const std::string& filename)
+{
+	printf("-- writing vdb to %s\n", filename.c_str());
+
+	std::vector<int> eidmaphost(_gridlayer[0]->n_elements);
+	gpu_manager_t::download_buf(eidmaphost.data(), _gridlayer[0]->_gbuf.eidmap, sizeof(int) * _gridlayer[0]->n_elements);
+	std::vector<float> rhohost(_gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(rhohost.data(), _gridlayer[0]->_gbuf.rho_e, sizeof(float) * _gridlayer[0]->n_gselements);
+
+	std::vector<int> epos[3];
+	std::vector<float> eposf[3];
+	for (int i = 0; i < 3; i++) epos[i].resize(_gridlayer[0]->n_elements);
+	for (int i = 0; i < 3; i++) eposf[i].resize(_gridlayer[0]->n_elements);
+
+	std::vector<float> evalue;
+	evalue.resize(_gridlayer[0]->n_elements);
+
+	float eh = elementLength();
+
+	float boxOrigin[3] = { _gridlayer[0]->_box[0][0],_gridlayer[0]->_box[0][1],_gridlayer[0]->_box[0][2] };
+
+	int reso = _gridlayer[0]->_ereso;
+
+	auto& esat = elesatlist[0];
+
+	int cycle_test = 0;
+	for (int i = 0; i < esat._bitArray.size(); i++) {
+		int eword = esat._bitArray[i];
+		int eidbase = esat._chunkSat[i];
+
+		int eidoffset = 0;
+		for (int ji = 0; ji < BitCount<unsigned int>::value; ji++) {
+			if (!read_bit(eword, ji)) continue;
+			int bitid = i * BitCount<unsigned int>::value + ji;
+			int bitpos[3] = { bitid % reso, bitid / reso % reso, bitid / reso / reso };
+			int eid = eidoffset + eidbase;
+			int rhoid = eidmaphost[eid];
+			for (int k = 0; k < 3; k++)
+			{
+				epos[k][eid] = bitpos[k];
+				//eposf[k].emplace_back(bitpos[k] * eh + boxOrigin[k]);
+
+				eposf[k][eid] = bitpos[k] * eh + 0.5 * eh + boxOrigin[k];
+				//eposf[k][eid] = bitpos[k] * eh + boxOrigin[k];
+			}
+			evalue[eid] = rhohost[rhoid];
+			eidoffset++;
+			cycle_test++;
+		}
+	}
+
+	std::cout << " cycle test : " << cycle_test << std::endl;
+
+#ifdef ENABLE_MATLAB
+
+	Eigen::Matrix<int, -1, -1> eidx_;
+	eidx_.resize(_gridlayer[0]->n_elements, 3);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			eidx_(i, j) = epos[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("eid", eidx_);
+
+
+	Eigen::Matrix<float, -1, -1> epos_;
+	epos_.resize(_gridlayer[0]->n_elements, 3);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			epos_(i, j) = eposf[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("epos", epos_);
+#endif
+	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
+}
+
 
 void grid::HierarchyGrid::writeSurfaceElement(const std::string& filename)
 {
@@ -952,7 +1222,7 @@ void grid::HierarchyGrid::writeComplianceDistribution(const std::string& filenam
 
 void grid::HierarchyGrid::writeDisplacement(const std::string& filename)
 {
-	writeNodePos(getPath("nodepos"), *_gridlayer[0]);
+	/*writeNodePos(getPath("nodepos"), *_gridlayer[0]);*/
 	std::vector<double> u[3];
 	for (int i = 0; i < 3; i++) {
 		u[i].resize(_gridlayer[0]->n_nodes());
@@ -1028,6 +1298,19 @@ void HierarchyGrid::writeNodePos(const std::string& nam, Grid& g)
 	std::vector<double> p3host;
 	getNodePos(g, p3host);
 	bio::write_vector(nam, p3host);
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<double, -1, -1> p3host_;
+	p3host_.resize(g.n_gsvertices, 3);
+	for (int i = 0; i < 3; i++)
+	{
+		
+		for (int j = 0; j < g.n_gsvertices; j++)
+		{
+			p3host_(j, i) = p3host[3 * j + i];
+		}
+	}
+	eigen2ConnectedMatlab("nodepos", p3host_);
+#endif // ENABLE_MATLAB
 }
 
 void HierarchyGrid::test_vcycle(void)
@@ -1368,6 +1651,9 @@ void Grid::lexico2gsorder(int* idmap, int n_id, int* ids, int n_mapid, int* mapp
 void Grid::computeProjectionMatrix(int nv, int nv_gs, int vreso, const std::vector<int>& lexi2gs, const int* lexi2gs_dev, BitSAT<unsigned int>& vsat, int* vflaghost, int* vflagdev)
 {
 	double eh = (_box[1][0] - _box[0][0]) / (vreso - 1);
+
+	std::cout << " bounding box min : (" << _box[0][0] << ", " << _box[0][1] << ", " << _box[0][2] << ")" << std::endl;
+	std::cout << " bounding box max : (" << _box[1][0] << ", " << _box[1][1] << ", " << _box[1][2] << ")" << std::endl;
 	int vreso2 = pow(vreso, 2);
 
 	std::vector<int> loadvid;
@@ -1433,7 +1719,20 @@ void Grid::computeProjectionMatrix(int nv, int nv_gs, int vreso, const std::vect
 	printf("-- found %d fixed nodes, %d load nodes\n", nfixnodes, loadvid.size());
 
 	//array2ConnectedMatlab("loadpos", loadpos.data()->data(), loadpos.size() * 3);
+#ifdef ENABLE_MATLAB
 	array2ConnectedMatlab("supportnodes", supportvids.data(), supportvids.size());
+
+	Eigen::Matrix<double, -1, -1> loadpos_(loadpos.size(), 3);
+	for (int i = 0; i < loadpos.size(); i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			loadpos_(i, j) = loadpos[i][j];
+		}
+	}
+	eigen2ConnectedMatlab("loadpos_", loadpos_);	
+#endif
+	
 
 	// write load flags back to device
 	gpu_manager_t::upload_buf(vflagdev, vflaghost, sizeof(int) * nv);
@@ -1473,6 +1772,20 @@ void Grid::computeProjectionMatrix(int nv, int nv_gs, int vreso, const std::vect
 			s3.emplace_back(supportpos[i][2]);
 		}
 		bio::write_vector(grids.getPath("supportpos"), s3);
+
+		// here the pos are actual input model scale
+#ifdef ENABLE_MATLAB
+		Eigen::Matrix<double, -1, -1> supppos_(supportpos.size(), 3);
+		for (int i = 0; i < supportpos.size(); i++)
+		{
+			for (int j = 0; j < 3; j++)
+			{
+				supppos_(i, j) = supportpos[i][j];				
+			}
+		}
+		eigen2ConnectedMatlab("supppos_", supppos_);
+#endif
+
 	}
 
 	setNodes(vsat, vreso, lexi2gs, lexi2gs_dev, vflagdev, nv_gs);
@@ -1635,8 +1948,8 @@ size_t grid::Grid::build(
 
 	n_vertices = nv;
 	n_elements = ne;
-	n_gselements = ne_gs;
-	n_gsvertices = nv_gs;
+	n_gselements = ne_gs; // correct to mod32 == 0
+	n_gsvertices = nv_gs; // correct to mod32 == 0
 
 	size_t gbuf_size = 0;
 
