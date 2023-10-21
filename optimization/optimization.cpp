@@ -3,6 +3,7 @@
 #include "matlab_utils.h"
 #include "binaryIO.h"
 #include "tictoc.h"
+#include <cstdlib>
 
 
 gpu_manager_t gpu_manager;
@@ -704,14 +705,33 @@ void setBoundaryCondition(std::function<bool(double[3])> fixarea, std::function<
 
 void initDensities(double rho)
 {
+#if 0
 	grids[0]->init_rho(rho);
+#else
+	float* rh0_noise = new float[grids[0]->n_rho()];
+	for (int i = 0; i < grids[0]->n_rho(); i++)
+	{
+		rh0_noise[i] = static_cast<float>(rand()) / RAND_MAX; // 生成0到1之间的随机数
+	}
+	grids[0]->init_rholist(rh0_noise);
+	delete[] rh0_noise;
+#endif
 }
 
 void initCoeffs(double coeff)
 {
-	// MARK
-	// To add initialization
+#if 0
 	grids[0]->init_coeff(coeff);
+#else
+	float* coeff_noise = new float[grids[0]->n_cijk()];
+	for (int i = 0; i < grids[0]->n_cijk(); i++)
+	{
+		coeff_noise[i] = coeff + static_cast<float>(rand() % 101) / 1000.0f; // 生成0到0.1之间的随机数
+	}
+	grids[0]->init_coefflist(coeff_noise);
+	delete[] coeff_noise;
+#endif
+
 }
 
 void update_stencil(void)

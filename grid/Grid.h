@@ -466,6 +466,11 @@ namespace grid {
 
 		void init_coeff(double coeff);
 
+		// MARK 
+		void init_rholist(float* rh0);
+
+		void init_coefflist(float* coeff);
+
 		float volumeRatio(void);
 
 		void use_grid(void);
@@ -628,13 +633,18 @@ namespace grid {
 
 		void setSolidShellElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags);
 
+		// MARK: to be updated
 		void setinModelVertice(const std::vector<unsigned int>& vbitfine, BitSAT<unsigned int>& esat, float box[2][3], int vreso, std::vector<int>& vflags);
-
+		// MARK: to be updated
 		void setinModelElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags);
 
 		void testShell(void);
 
 		void fillShell(void);
+
+		// about spline
+		void coeff2density(void);
+
 
 		// log file
 		void log(int itn);
@@ -682,6 +692,8 @@ namespace grid {
 		//void restrict_adjoint_stencil(Grid& dstcoarse, Grid& srcfine);
 
 		void writeNodePos(const std::string& filename, Grid& g);
+
+		void writeElementPos(const std::string& filename, Grid& g);
 
 		void writeEidMap(const std::string& filename, Grid& g);
 

@@ -680,11 +680,11 @@ void TestSuit::testOrdinarySplineTopopt(void)
 
 	grids.testShell();
 	grids.writeNodePos(grids.getPath("nodepos"), *grids[0]);
+	grids.writeElementPos(grids.getPath("elepos"), *grids[0]);
 
 	// MARK: ADD user-defined input
 	initCoeffs(1);		
 	grids.writeCoeff(grids.getPath("coeff"));
-
 
 #if 1	
 	initDensities(params.volume_ratio);
@@ -694,7 +694,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	float Vgoal = 1;
 #endif
 
-	grids.writeDensityac(grids.getPath("density_test"));
+	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 
 	snippet::converge_criteria stop_check(1, 5, 1e-3);

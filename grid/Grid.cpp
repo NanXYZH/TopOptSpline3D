@@ -109,7 +109,7 @@ void HierarchyGrid::setSolidShellElement(const std::vector<unsigned int>& ebitfi
 					ec[2] = (z + 0.5)* eh + box[0][2];
 					double d = aabb_tree.squared_distance(Point(ec[0], ec[1], ec[2]));
 					if (d < sh2) {
-						int ebid = x + y * ereso + z * ereso*ereso;
+						int ebid = x + y * ereso + z * ereso * ereso;
 						int eid = esat(ebid);
 						if (eid != -1) {
 							eidshell.emplace_back(eid);
@@ -128,22 +128,11 @@ void HierarchyGrid::setSolidShellElement(const std::vector<unsigned int>& ebitfi
 
 	printf("-- found %d shell elements\n", shellelements.size());
 
-#ifdef ENABLE_MATLAB
-	Eigen::Matrix<int, -1, -1> eflag1(shellelements.size(), 1);
-	Eigen::Matrix<int, -1, -1> eflag2(shellelements.size(), 1);
-
 	for (auto iter = shellelements.begin(); iter != shellelements.end(); iter++) {
 		int oldword = eflags[*iter];
-		eflag1(*iter, 1) = oldword;
 		oldword |= int(Grid::Bitmask::mask_shellelement);
-		eflag2(*iter, 1) = oldword;
 		eflags[*iter] = oldword;
 	}
-
-	eigen2ConnectedMatlab("eflag1", eflag1);
-	eigen2ConnectedMatlab("eflag2", eflag2);
-#endif
-
 }
 
 void HierarchyGrid::setinModelVertice(const std::vector<unsigned int>& vbitfine, BitSAT<unsigned int>& vsat, float box[2][3], int ereso, std::vector<int>& vflags) {
@@ -214,7 +203,6 @@ void HierarchyGrid::setinModelVertice(const std::vector<unsigned int>& vbitfine,
 		oldword |= int(Grid::Bitmask::mask_modelnodes);
 		vflags[*iter] = oldword;
 	}
-
 }
 
 
@@ -286,11 +274,7 @@ void HierarchyGrid::setinModelElement(const std::vector<unsigned int>& ebitfine,
 		oldword |= int(Grid::Bitmask::mask_modelelements);
 		eflags[*iter] = oldword;
 	}
-
 }
-
-
-
 
 void HierarchyGrid::testShell(void)
 {
@@ -972,22 +956,21 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 	gpu_manager_t::download_buf(rhohost.data(), _gridlayer[0]->_gbuf.rho_e, sizeof(float) * _gridlayer[0]->n_gselements);
 
 	std::vector<int> epos[3];
-	std::vector<float> eposf[3];
+	std::vector<double> eposf[3];
 	for (int i = 0; i < 3; i++) epos[i].resize(_gridlayer[0]->n_elements);
 	for (int i = 0; i < 3; i++) eposf[i].resize(_gridlayer[0]->n_elements);
 
 	std::vector<float> evalue;
 	evalue.resize(_gridlayer[0]->n_elements);
 
-	float eh = elementLength();
+	double eh = elementLength();
 
-	float boxOrigin[3] = { _gridlayer[0]->_box[0][0],_gridlayer[0]->_box[0][1],_gridlayer[0]->_box[0][2] };
+	double boxOrigin[3] = { _gridlayer[0]->_box[0][0],_gridlayer[0]->_box[0][1],_gridlayer[0]->_box[0][2] };
 
-	int reso = _gridlayer[0]->_ereso;
+	int ereso = _gridlayer[0]->_ereso;
 
 	auto& esat = elesatlist[0];
-
-	int cycle_test = 0;
+	
 	for (int i = 0; i < esat._bitArray.size(); i++) {
 		int eword = esat._bitArray[i];
 		int eidbase = esat._chunkSat[i];
@@ -996,27 +979,19 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 		for (int ji = 0; ji < BitCount<unsigned int>::value; ji++) {
 			if (!read_bit(eword, ji)) continue;
 			int bitid = i * BitCount<unsigned int>::value + ji;
-			int bitpos[3] = { bitid % reso, bitid / reso % reso, bitid / reso / reso };
+			int bitpos[3] = { bitid % ereso, bitid / ereso % ereso, bitid / ereso / ereso };
 			int eid = eidoffset + eidbase;
 			int rhoid = eidmaphost[eid];
 			for (int k = 0; k < 3; k++)
 			{
 				epos[k][eid] = bitpos[k];
-				//eposf[k].emplace_back(bitpos[k] * eh + boxOrigin[k]);
-
 				eposf[k][eid] = bitpos[k] * eh + 0.5 * eh + boxOrigin[k];
-				//eposf[k][eid] = bitpos[k] * eh + boxOrigin[k];
 			}
 			evalue[eid] = rhohost[rhoid];
 			eidoffset++;
-			cycle_test++;
 		}
 	}
-
-	std::cout << " cycle test : " << cycle_test << std::endl;
-
 #ifdef ENABLE_MATLAB
-
 	Eigen::Matrix<int, -1, -1> eidx_;
 	eidx_.resize(_gridlayer[0]->n_elements, 3);
 
@@ -1029,8 +1004,16 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 	}
 	eigen2ConnectedMatlab("eid", eidx_);
 
+	Eigen::Matrix<float, -1, 1> evalue_;
+	evalue_.resize(_gridlayer[0]->n_elements, 1);
 
-	Eigen::Matrix<float, -1, -1> epos_;
+	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+	{
+		evalue_(i, 1) = evalue[i];
+	}
+	eigen2ConnectedMatlab("rhoe", evalue_);
+
+	Eigen::Matrix<double, -1, -1> epos_;
 	epos_.resize(_gridlayer[0]->n_elements, 3);
 
 	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
@@ -1310,6 +1293,25 @@ void HierarchyGrid::writeNodePos(const std::string& nam, Grid& g)
 		}
 	}
 	eigen2ConnectedMatlab("nodepos", p3host_);
+#endif // ENABLE_MATLAB
+}
+
+void HierarchyGrid::writeElementPos(const std::string& filename, Grid& g)
+{
+	std::vector<double> p3host;
+	getElementPos(g, p3host);
+	bio::write_vector(filename, p3host);
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<double, -1, -1> p3host_;
+	p3host_.resize(g.n_gselements, 3);
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < g.n_gselements; j++)
+		{
+			p3host_(j, i) = p3host[3 * j + i];
+		}
+	}
+	eigen2ConnectedMatlab("elepos", p3host_);
 #endif // ENABLE_MATLAB
 }
 
@@ -2091,24 +2093,6 @@ void grid::Grid::readForce(std::string forcefile)
 	for (int i = 0; i < 3; i++) {
 		gpu_manager_t::upload_buf(_gbuf.F[i], f[i].data(), sizeof(double) * n_gsvertices);
 	}
-
-#if 0
-#ifdef ENABLE_MATLAB
-	Eigem::Matrix<double, -1, 1> fx_tmp;
-	Eigem::Matrix<double, -1, 1> fy_tmp;
-	Eigem::Matrix<double, -1, 1> fz_tmp;
-	fx_tmp.resize(n_gsvertices, 1);
-	fy_tmp.resize(n_gsvertices, 1);
-	fz_tmp.resize(n_gsvertices, 1);
-	std::copy(f[0].begin(), f[0].end(), fx_tmp.begin());
-	std::copy(f[1].begin(), f[1].end(), fy_tmp.begin());
-	std::copy(f[2].begin(), f[2].end(), fz_tmp.begin());
-	eigen2ConnectedMatlab("f_x", fx_tmp);
-	eigen2ConnectedMatlab("f_y", fy_tmp);
-	eigen2ConnectedMatlab("f_z", fz_tmp);
-#endif
-#endif
-
 #ifdef ENABLE_MATLAB
 	std::vector<double> fhos[3];
 	Eigen::Matrix<double, -1, -1> f2fhost(n_gsvertices, 3);
@@ -2127,12 +2111,6 @@ void grid::Grid::readForce(std::string forcefile)
 		}
 	}
 	eigen2ConnectedMatlab("f", f2fhost);
-#endif
-
-# if 0
-#ifdef ENABLE_MATLAB
-	v3_toMatlab("f2", _gbuf.F);
-#endif // ENABLE_MATLAB
 #endif
 }
 
@@ -2160,21 +2138,6 @@ void grid::Grid::readSupportForce(std::string fsfile)
 	uploadLoadForce(pload);
 	setForceSupport(getPreloadForce(), getForce());
 
-# if 0
-#ifdef ENABLE_MATLAB
-	Eigen::Matrix<double, -1, 1> f_x(n_loadnodes(), 1);
-	Eigen::Matrix<double, -1, 1> f_y(n_loadnodes(), 1);
-	Eigen::Matrix<double, -1, 1> f_z(n_loadnodes(), 1);
-	std::copy(f[0].begin(), f[0].end(), f_x.begin());
-	std::copy(f[1].begin(), f[1].end(), f_y.begin());
-	std::copy(f[2].begin(), f[2].end(), f_z.begin());
-
-	eigen2ConnectedMatlab("fs_x", f_x);
-	eigen2ConnectedMatlab("fs_y", f_y);
-	eigen2ConnectedMatlab("fs_z", f_z);
-#endif
-#endif
-
 #ifdef ENABLE_MATLAB
 	std::vector<double> fhos[3];
 	Eigen::Matrix<double, -1, -1> f2fhost(n_loadnodes(), 3);
@@ -2195,11 +2158,6 @@ void grid::Grid::readSupportForce(std::string fsfile)
 	eigen2ConnectedMatlab("fs", f2fhost);
 #endif
 
-# if 0
-#ifdef ENABLE_MATLAB
-	v3_toMatlab("fs2", _gbuf.F);
-#endif // ENABLE_MATLAB
-#endif
 }
 
 void grid::Grid::readDisplacement(std::string displacementfile)

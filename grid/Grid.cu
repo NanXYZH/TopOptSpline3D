@@ -3120,15 +3120,13 @@ void Grid::setV2V_g(int vreso, BitSAT<unsigned int>& vrtsat, int* v2v[27])
 	cuda_error_check;
 }
 
+
+
 void Grid::init_rho(double rh0)
 {
+	// MARK: TO ADD
+	// initialization of rh0
 	init_array(_gbuf.rho_e, float(rh0), n_rho());
-
-	//std::cout << "test n_nodes : " << n_nodes() << std::endl;
-	//std::cout << "test n_elements : " << n_eles() << std::endl;
-	//std::cout << "test n_valid_nodes : " << n_valid_nodes() << std::endl;
-	//std::cout << "test n_valid_elements : " << n_valid_elements() << std::endl;
-	//std::cout << "test n_rho : " << n_rho() << std::endl;
 }
 
 void Grid::init_coeff(double coeff)
@@ -3136,8 +3134,34 @@ void Grid::init_coeff(double coeff)
 	// MARK
 	// To add
 	int coeff_size = n_im * n_in * n_il;
-	//std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
+	std::cout << " test : " << n_cijk() << std::endl;
+	std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
 	init_array(_gbuf.coeffs, float(coeff), coeff_size);
+}
+
+
+//void TestSuit::setDensity(float* newrho)
+//{
+//	cudaMemcpy(grids[0]->getRho(), newrho, sizeof(float) * grids[0]->n_rho(), cudaMemcpyDeviceToDevice);
+//	cuda_error_check;
+//}
+
+void grid::Grid::init_rholist(float* rh0)
+{
+	float* tmp_buf;
+	cudaMalloc(&tmp_buf, n_rho() * sizeof(float));
+	cudaMemcpy(tmp_buf, rh0, n_rho() * sizeof(float), cudaMemcpyHostToDevice);
+	init_arraylist(_gbuf.rho_e, tmp_buf, n_rho());
+	cudaFree(tmp_buf);
+}
+
+void grid::Grid::init_coefflist(float* coeff)
+{
+	float* tmp_buf;
+	cudaMalloc(&tmp_buf, n_cijk() * sizeof(float));
+	cudaMemcpy(tmp_buf, coeff, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	init_arraylist(_gbuf.coeffs, tmp_buf, n_cijk());
+	cudaFree(tmp_buf);
 }
 
 __global__ void computeNodePos_kernel(int n_word, int vreso, gBitSAT<unsigned int> vrtsat, devArray_t<double, 3> orig, double eh, devArray_t<double*, 3> pos) {
@@ -3156,7 +3180,6 @@ __global__ void computeNodePos_kernel(int n_word, int vreso, gBitSAT<unsigned in
 		}
 	}
 }
-
 
 void HierarchyGrid::getNodePos(Grid& g, std::vector<double>& p3host)
 {
@@ -3204,23 +3227,22 @@ void HierarchyGrid::getNodePos(Grid& g, std::vector<double>& p3host)
 			p3host[j * 3 + i] = hostpos[j];
 		}
 	}
-
 }
 
-// MARK: may have 0.5 offset of ec
 __global__ void computeElementPos_kernel(int n_word, int vreso, gBitSAT<unsigned int> elesat, devArray_t<double, 3> orig, double eh, devArray_t<double*, 3> pos) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= n_word) return;
 	
 	auto word = elesat._bitarray[tid];
+	int ereso = vreso - 1;
 
 	for (int ji = 0; ji < BitCount<unsigned int>::value; ji++) {
 		if (!read_gbit(word, ji)) continue;
-		int vbid = tid * BitCount<unsigned int>::value + ji;
-		int vpos[3] = { vbid % vreso, vbid / vreso % vreso, vbid / vreso / vreso };
-		int vid = elesat[vbid];
+		int ebid = tid * BitCount<unsigned int>::value + ji;
+		int epos[3] = { ebid % ereso, ebid / ereso % ereso, ebid / ereso / ereso };
+		int eid = elesat[ebid];
 		for (int k = 0; k < 3; k++) {
-			pos[k][vid] = orig[k] + eh * vpos[k];
+			pos[k][eid] = orig[k] + eh * epos[k] + 0.5 * eh;
 		}
 	}
 }
@@ -3270,30 +3292,8 @@ void HierarchyGrid::getElementPos(Grid& g, std::vector<double>& p3host)
 			p3host[j * 3 + i] = hostpos[j];
 		}
 	}
-
 }
 
-
-//void HierarchyGrid::fillShell(void)
-//{
-//	_gridlayer[0]->use_grid();
-//	size_t grid_size, block_size;
-//	make_kernel_param(&grid_size, &block_size, _gridlayer[0]->n_gsvertices, 512);
-//	int nv = _gridlayer[0]->n_gsvertices;
-//	float* rholist = _gridlayer[0]->_gbuf.rho_e;
-//	auto fillkernel = [=] __device__(int tid) {
-//		if (tid >= nv) return;
-//		int flag = gVflag[0][tid];
-//		if (flag & Grid::Bitmask::mask_invalid) return;
-//		int eid = gV2E[0][tid];
-//		if (eid == -1) return;
-//		int eflag = gEflag[0][eid];
-//		if (eflag & Grid::Bitmask::mask_shellelement) rholist[eid] = 1;
-//	};
-//	traverse_noret << <grid_size, block_size >> > (_gridlayer[0]->n_gsvertices, fillkernel);
-//	cudaDeviceSynchronize();
-//	cuda_error_check;
-//}
 
 void HierarchyGrid::fillShell(void)
 {
@@ -3302,21 +3302,18 @@ void HierarchyGrid::fillShell(void)
 	make_kernel_param(&grid_size, &block_size, _gridlayer[0]->n_gsvertices, 512);
 	int nv = _gridlayer[0]->n_gsvertices;
 	float* rholist = _gridlayer[0]->_gbuf.rho_e;
-	auto fillkernal = [=] __device__(int tid) {
-		if (tid > nv) return;
-		int vflag = gVflag[0][tid];
-		if (vflag & Grid::Bitmask::offset_invalid) return;
+	auto fillkernel = [=] __device__(int tid) {
+		if (tid >= nv) return;
+		int flag = gVflag[0][tid];
+		if (flag & Grid::Bitmask::mask_invalid) return;
 		int eid = gV2E[0][tid];
 		if (eid == -1) return;
 		int eflag = gEflag[0][eid];
-		if (eflag & Grid::Bitmask::offset_shellelement) rholist[eid] = 1;
+		if (eflag & Grid::Bitmask::mask_shellelement) rholist[eid] = 1;
 	};
-	traverse_noret << <grid_size, block_size >> > (_gridlayer[0]->n_gsvertices, fillkernal);
+	traverse_noret << <grid_size, block_size >> > (_gridlayer[0]->n_gsvertices, fillkernel);
 	cudaDeviceSynchronize();
 	cuda_error_check;
-
-
-
 }
 
 float* Grid::getlexiEbuf(float* gs_src)

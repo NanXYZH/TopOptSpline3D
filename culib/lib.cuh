@@ -374,6 +374,24 @@ void init_array(T* dev_array, T value, int array_size) {
 	cuda_error_check;
 }
 
+template<typename T>
+__global__ void init_arraylist_kernel(T* array, T* value, int array_size) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	if (tid < array_size) {
+		array[tid] = value[tid];
+	}
+}
+
+template<typename T>
+void init_arraylist(T* dev_array, T* value, int array_size) {
+	size_t grid_dim;
+	size_t block_dim;
+	make_kernel_param(&grid_dim, &block_dim, array_size, 512);
+	init_arraylist_kernel << <grid_dim, block_dim >> > (dev_array, value, array_size);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+}
+
 
 template<typename T, typename Lam>
 __global__ void map(T* g_data, Scaler* dst, int n, Lam func) {
