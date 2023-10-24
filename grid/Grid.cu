@@ -43,6 +43,12 @@ __constant__ int gorder[1];
 __constant__ int gnpartition[3];
 __constant__ int gnbasis[3];
 __constant__ int gnknotspan[3];
+__constant__ float gnstep[3];
+__constant__ float gnBoundMin[3];
+__constant__ float gnBoundMax[3];
+
+__constant__ float* gpu_KnotSer[3];
+__constant__ float* gpu_cijk;
 
 extern __constant__ double* gLoadtangent[2][3];
 extern __constant__ double* gLoadnormal[3];
@@ -116,6 +122,438 @@ __device__ void loadNeighborNodesAndFlags(int vid, int v2v[27], bool vfix[27], b
 __device__ void loadNeighborNodes(int vid, int v2v[27]) {
 	for (int i = 0; i < 27; i++) { v2v[i] = gV2V[i][vid]; }
 }
+
+// Spline
+__device__ void SplineBasisX(float x, float* pNX)
+{
+	//float* left = new float[m_iM];
+	//float* right = new float[m_iM];
+	float left[m_iM], right[m_iM];
+	pNX[0] = 1.0;
+
+	int l = (int)((x - gnBoundMin[0]) / gnstep[0]) + m_iM - 1;
+	for (int j = 1; j < m_iM; j++)
+	{
+		//left[j] = x - gpu_ptrfKnotSerX[l + 1 - j];
+		//right[j] = gpu_ptrfKnotSerX[l + j] - x;
+		left[j] = x - gpu_KnotSer[0][l + 1 - j];
+		right[j] = gpu_KnotSer[0][l + j] - x;
+
+		float saved = 0.0;
+		for (int r = 0; r < j; r++)
+		{
+			float temp = pNX[r] / (right[r + 1] + left[j - r]);
+			pNX[r] = saved + right[r + 1] * temp;
+			saved = left[j - r] * temp;
+		}
+
+		pNX[j] = saved;
+	}
+	pNX[m_iM] = 0.0;
+}
+
+__device__ void SplineBasisY(float y, float* pNY)
+{
+	//float* left = new float[m_iM];
+	//float* right = new float[m_iM];
+	float left[m_iM], right[m_iM];
+	pNY[0] = 1.0;
+
+	int l = (int)((y - gnBoundMin[1]) / gnstep[1]) + m_iM - 1;
+	for (int j = 1; j < m_iM; j++)
+	{
+		//left[j] = y - gpu_ptrfKnotSerY[l + 1 - j];
+		//right[j] = gpu_ptrfKnotSerY[l + j] - y;
+		left[j] = y - gpu_KnotSer[1][l + 1 - j];
+		right[j] = gpu_KnotSer[1][l + j] - y;
+
+		float saved = 0.0;
+		for (int r = 0; r < j; r++)
+		{
+			float temp = pNY[r] / (right[r + 1] + left[j - r]);
+			pNY[r] = saved + right[r + 1] * temp;
+			saved = left[j - r] * temp;
+		}
+
+		pNY[j] = saved;
+	}
+	pNY[m_iM] = 0.0;
+}
+
+__device__ void SplineBasisZ(float z, float* pNZ)
+{
+	//float* left = new float[m_iM];
+	//float* right = new float[m_iM];
+	float left[m_iM], right[m_iM];
+	pNZ[0] = 1.0;
+
+	int l = (int)((z - gnBoundMin[2]) / gnstep[2]) + m_iM - 1;
+	for (int j = 1; j < m_iM; j++)
+	{
+		//left[j] = z - gpu_ptrfKnotSerZ[l + 1 - j];
+		//right[j] = gpu_ptrfKnotSerZ[l + j] - z;
+		left[j] = z - gpu_KnotSer[2][l + 1 - j];
+		right[j] = gpu_KnotSer[2][l + j] - z;
+
+		float saved = 0.0;
+		for (int r = 0; r < j; r++)
+		{
+			float temp = pNZ[r] / (right[r + 1] + left[j - r]);
+			pNZ[r] = saved + right[r + 1] * temp;
+			saved = left[j - r] * temp;
+		}
+
+		pNZ[j] = saved;
+	}
+	pNZ[m_iM] = 0.0;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// SplineBasisDeriX:
+//		calculate the derivative of spline basis of x direction
+__device__ void SplineBasisDeriX(float x, const int n, float* value)
+{
+	int l = (int)((x - gnBoundMin[0]) / gnstep[0]) + m_iM - 1;
+
+	// allocate the array
+	int i, j, k, r;
+	float ders[10][m_iM] = { {0.f} };
+	float test[m_iM] = { 0.0f };
+	float ndu[m_iM][m_iM] = { {0.f} };
+	float a[2][m_iM] = { {0.f} };
+
+	float left[m_iM], right[m_iM];
+
+	// store functions and knot differences
+	ndu[0][0] = 1.0f;
+	for (j = 1; j < m_iM; j++)
+	{
+		//left[j] = x - gpu_ptrfKnotSerX[l + 1 - j];
+		//right[j] = gpu_ptrfKnotSerX[l + j] - x;
+		left[j] = x - gpu_KnotSer[0][l + 1 - j];
+		right[j] = gpu_KnotSer[0][l + j] - x;
+
+		float saved = 0.0f;
+		for (r = 0; r < j; r++)
+		{
+			ndu[j][r] = right[r + 1] + left[j - r];
+			float temp = ndu[r][j - 1] / ndu[j][r];
+			ndu[r][j] = saved + right[r + 1] * temp;
+			saved = left[j - r] * temp;
+		}
+		ndu[j][j] = saved;
+	}
+
+	// load the basis functions
+	for (j = 0; j < m_iM; j++)
+		ders[0][j] = ndu[j][m_iM - 1];
+
+	// compute the derivatives
+	for (r = 0; r < m_iM; r++)
+	{
+		int s1 = 0, s2 = 1;
+		a[0][0] = 1.0f;
+
+		for (k = 1; k < n; k++)
+		{
+			int j1, j2;
+			float d = 0.0f;
+			int rk = r - k, pk = m_iM - 1 - k;
+
+			if (r >= k)
+			{
+				a[s2][0] = a[s1][0] / ndu[pk + 1][rk];
+				d = a[s2][0] * ndu[rk][pk];
+			}
+
+			if (rk >= -1)
+				j1 = 1;
+			else
+				j1 = -rk;
+
+			if (r - 1 <= pk)
+				j2 = k - 1;
+			else
+				j2 = m_iM - 1 - r;
+
+			for (j = j1; j <= j2; j++)
+			{
+				a[s2][j] = (a[s1][j] - a[s1][j - 1]) / ndu[pk + 1][rk + j];
+				d += a[s2][j] * ndu[rk + j][pk];
+			}
+
+			if (r <= pk)
+			{
+				a[s2][k] = -a[s1][k - 1] / ndu[pk + 1][r];
+				d += a[s2][k] * ndu[r][pk];
+			}
+
+			ders[k][r] = d;
+			j = s1; s1 = s2; s2 = j;
+		}
+	}
+
+	r = m_iM - 1;
+	for (k = 1; k < n; k++)
+	{
+		for (j = 0; j < m_iM; j++)
+			ders[k][j] *= r;
+		r *= (m_iM - 1 - k);
+	}
+
+	for (i = 0; i < m_iM; i++)
+	{
+		value[i] = ders[n - 1][i];
+	}
+
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// SplineBasisDeriY:
+//		calculate the derivative of spline basis of y direction
+__device__ void SplineBasisDeriY(float y, int n, float* value)
+{
+	int l = (int)((y - gnBoundMin[1]) / gnstep[1]) + m_iM - 1;
+
+	// allocate the array
+	int i, j, k, r;
+	float ders[10][m_iM] = { {0.f} };
+	float test[m_iM] = { 0.0f };
+	float ndu[m_iM][m_iM] = { {0.f} };
+	float a[2][m_iM] = { {0.f} };
+
+	float left[m_iM], right[m_iM];
+
+	//float** ndu = new float* [m_iM];
+	//float** a = new float* [2];
+	//for (i = 0; i < m_iM; i++)
+	//{
+	//	ndu[i] = new float[m_iM];
+	//	if (i < 2)
+	//		a[i] = new float[m_iM];
+	//}
+
+	//float* left = new float[m_iM];
+	//float* right = new float[m_iM];
+
+	// store functions and knot differences
+	ndu[0][0] = 1.0f;
+	for (j = 1; j < m_iM; j++)
+	{
+		//left[j] = y - gpu_ptrfKnotSerY[l + 1 - j];
+		//right[j] = gpu_ptrfKnotSerY[l + j] - y;
+		left[j] = y - gpu_KnotSer[1][l + 1 - j];
+		right[j] = gpu_KnotSer[1][l + j] - y;
+
+		float saved = 0.0f;
+		for (r = 0; r < j; r++)
+		{
+			ndu[j][r] = right[r + 1] + left[j - r];
+			float temp = ndu[r][j - 1] / ndu[j][r];
+			ndu[r][j] = saved + right[r + 1] * temp;
+			saved = left[j - r] * temp;
+		}
+		ndu[j][j] = saved;
+	}
+
+	// load the basis functions
+	for (j = 0; j < m_iM; j++)
+		ders[0][j] = ndu[j][m_iM - 1];
+
+	// compute the derivatives
+	for (r = 0; r < m_iM; r++)
+	{
+		int s1 = 0, s2 = 1;
+		a[0][0] = 1.0f;
+
+		for (k = 1; k < n; k++)
+		{
+			int j1, j2;
+			float d = 0.0f;
+			int rk = r - k, pk = m_iM - 1 - k;
+
+			if (r >= k)
+			{
+				a[s2][0] = a[s1][0] / ndu[pk + 1][rk];
+				d = a[s2][0] * ndu[rk][pk];
+			}
+
+			if (rk >= -1)
+				j1 = 1;
+			else
+				j1 = -rk;
+
+			if (r - 1 <= pk)
+				j2 = k - 1;
+			else
+				j2 = m_iM - 1 - r;
+
+			for (j = j1; j <= j2; j++)
+			{
+				a[s2][j] = (a[s1][j] - a[s1][j - 1]) / ndu[pk + 1][rk + j];
+				d += a[s2][j] * ndu[rk + j][pk];
+			}
+
+			if (r <= pk)
+			{
+				a[s2][k] = -a[s1][k - 1] / ndu[pk + 1][r];
+				d += a[s2][k] * ndu[r][pk];
+			}
+
+			ders[k][r] = d;
+			j = s1; s1 = s2; s2 = j;
+		}
+	}
+
+	r = m_iM - 1;
+	for (k = 1; k < n; k++)
+	{
+		for (j = 0; j < m_iM; j++)
+			ders[k][j] *= r;
+		r *= (m_iM - 1 - k);
+	}
+
+	for (i = 0; i < m_iM; i++)
+	{
+		value[i] = ders[n - 1][i];
+	}
+	//// free the array
+	//for (i = 0; i < m_iM; i++)
+	//{
+	//	delete[] ndu[i];
+	//	if (i < 2)
+	//		delete[] a[i];
+	//}
+	//delete[] ndu;
+	//delete[] a;
+
+	//delete[] left;
+	//delete[] right;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// SplineBasisDeriZ:
+//		calculate the derivative of spline basis of z direction
+__device__ void SplineBasisDeriZ(float z, int n, float* value)
+{
+	int l = (int)((z - gnBoundMin[2]) / gnstep[2]) + gorder[0] - 1;
+
+	// allocate the array
+	int i, j, k, r;
+	float ders[10][m_iM] = { {0.f} };
+	float test[m_iM] = { 0.0f };
+	float ndu[m_iM][m_iM] = { {0.f} };
+	float a[2][m_iM] = { {0.f} };
+
+	float left[m_iM], right[m_iM];
+
+	//float** ndu = new float* [m_iM];
+	//float** a = new float* [2];
+	//for (i = 0; i < m_iM; i++)
+	//{
+	//	ndu[i] = new float[m_iM];
+	//	if (i < 2)
+	//		a[i] = new float[m_iM];
+	//}
+
+	//float* left = new float[m_iM];
+	//float* right = new float[m_iM];
+
+	// store functions and knot differences
+	ndu[0][0] = 1.0f;
+	for (j = 1; j < m_iM; j++)
+	{
+		//left[j] = z - gpu_ptrfKnotSerZ[l + 1 - j];
+		//right[j] = gpu_ptrfKnotSerZ[l + j] - z;
+		left[j] = z - gpu_KnotSer[2][l + 1 - j];
+		right[j] = gpu_KnotSer[2][l + j] - z;
+
+		float saved = 0.0f;
+		for (r = 0; r < j; r++)
+		{
+			ndu[j][r] = right[r + 1] + left[j - r];
+			float temp = ndu[r][j - 1] / ndu[j][r];
+			ndu[r][j] = saved + right[r + 1] * temp;
+			saved = left[j - r] * temp;
+		}
+		ndu[j][j] = saved;
+	}
+
+	// load the basis functions
+	for (j = 0; j < m_iM; j++)
+		ders[0][j] = ndu[j][m_iM - 1];
+
+	// compute the derivatives
+	for (r = 0; r < m_iM; r++)
+	{
+		int s1 = 0, s2 = 1;
+		a[0][0] = 1.0f;
+
+		for (k = 1; k < n; k++)
+		{
+			int j1, j2;
+			float d = 0.0f;
+			int rk = r - k, pk = m_iM - 1 - k;
+
+			if (r >= k)
+			{
+				a[s2][0] = a[s1][0] / ndu[pk + 1][rk];
+				d = a[s2][0] * ndu[rk][pk];
+			}
+
+			if (rk >= -1)
+				j1 = 1;
+			else
+				j1 = -rk;
+
+			if (r - 1 <= pk)
+				j2 = k - 1;
+			else
+				j2 = m_iM - 1 - r;
+
+			for (j = j1; j <= j2; j++)
+			{
+				a[s2][j] = (a[s1][j] - a[s1][j - 1]) / ndu[pk + 1][rk + j];
+				d += a[s2][j] * ndu[rk + j][pk];
+			}
+
+			if (r <= pk)
+			{
+				a[s2][k] = -a[s1][k - 1] / ndu[pk + 1][r];
+				d += a[s2][k] * ndu[r][pk];
+			}
+
+			ders[k][r] = d;
+			j = s1; s1 = s2; s2 = j;
+		}
+	}
+
+	r = m_iM - 1;
+	for (k = 1; k < n; k++)
+	{
+		for (j = 0; j < m_iM; j++)
+			ders[k][j] *= r;
+		r *= (m_iM - 1 - k);
+	}
+
+	for (i = 0; i < m_iM; i++)
+	{
+		value[i] = ders[n - 1][i];
+	}
+	//// free the array
+	//for (i = 0; i < m_iM; i++)
+	//{
+	//	delete[] ndu[i];
+	//	if (i < 2)
+	//		delete[] a[i];
+	//}
+	//delete[] ndu;
+	//delete[] a;
+
+	//delete[] left;
+	//delete[] right;
+}
+
 
 /*
 	//rxcoarse[32(27)][9][nv]
@@ -2327,6 +2765,7 @@ void HierarchyGrid::setMode(Mode mode)
 void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int sorder)
 {
 	int sporder = sorder;
+	grid::Grid::n_order = sorder;
 	cudaMemcpyToSymbol(gorder, &sporder, sizeof(int));
 	cuda_error_check;
 
@@ -2336,8 +2775,10 @@ void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int
 	grid::Grid::n_partitionx = spartx;
 	grid::Grid::n_partitiony = sparty;
 	grid::Grid::n_partitionz = spartz;
-	int sppartition[3] = { spartx, sparty, spartz };
-	cudaMemcpyToSymbol(gnpartition, sppartition, sizeof(gnpartition));
+	grid::Grid::sppartition[0] = spartx;
+	grid::Grid::sppartition[1] = sparty;
+	grid::Grid::sppartition[2] = spartz;
+	cudaMemcpyToSymbol(gnpartition, grid::Grid::sppartition, sizeof(gnpartition));
 	cuda_error_check;
 
 	_setting.n_im = sorder + spartx;
@@ -2346,8 +2787,11 @@ void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int
 	Grid::n_im = sorder + spartx;
 	Grid::n_in = sorder + sparty;
 	Grid::n_il = sorder + spartz;
-	int spbasis[3] = { sorder + spartx, sorder + sparty, sorder + spartz };
-	cudaMemcpyToSymbol(gnbasis, spbasis, sizeof(gnbasis));
+	//int spbasis[3] = { sorder + spartx, sorder + sparty, sorder + spartz };
+	Grid::spbasis[0] = sorder + spartx;
+	Grid::spbasis[1] = sorder + sparty;
+	Grid::spbasis[2] = sorder + spartz;
+	cudaMemcpyToSymbol(gnbasis, grid::Grid::spbasis, sizeof(gnbasis));
 	cuda_error_check;
 
 	_setting.n_knotspanx = 2 * sorder + spartx;
@@ -2356,10 +2800,396 @@ void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int
 	Grid::n_knotspanx = 2 * sorder + spartx;
 	Grid::n_knotspany = 2 * sorder + sparty;
 	Grid::n_knotspanz = 2 * sorder + spartz;
-	int spknotspan[3] = { 2 * sorder + spartx, 2 * sorder + sparty, 2 * sorder + spartz };
-	cudaMemcpyToSymbol(gnknotspan, spknotspan, sizeof(gnknotspan));
+	//int spknotspan[3] = { 2 * sorder + spartx, 2 * sorder + sparty, 2 * sorder + spartz };
+	Grid::spknotspan[0] = 2 * sorder + spartx;
+	Grid::spknotspan[1] = 2 * sorder + sparty;
+	Grid::spknotspan[2] = 2 * sorder + spartz;
+	cudaMemcpyToSymbol(gnknotspan, grid::Grid::spknotspan, sizeof(int) * 3);
+	cuda_error_check;
+
+	//std::cout << "-------------- spline info --------------------------- " << std::endl;
+	//int orderhost;
+	//int* orderhost2 = new int[1];
+	//int* partitionhost = new int[3];
+	//int* basishost = new int[3];
+	//int* knotspanhost = new int[8];
+	//cudaMemcpyFromSymbol(&orderhost, gorder, sizeof(int));
+	//cudaMemcpyFromSymbol(orderhost2, gorder, sizeof(int));
+	//cudaMemcpyFromSymbol(partitionhost, gnpartition, sizeof(int) * 3);
+	//cudaMemcpyFromSymbol(basishost, gnbasis, sizeof(int) * 3);
+	//cudaMemcpyFromSymbol(knotspanhost, gnknotspan, sizeof(int) * 3);
+	//std::cout << "gnorder: " << orderhost << std::endl;
+	//std::cout << "gnorder: " << orderhost2[0] << std::endl;
+	//std::cout << "gnpartition: " << partitionhost[0] << ", " << partitionhost[1] << ", " << partitionhost[2] << std::endl;
+	//std::cout << "gnpartition: " << grid::Grid::sppartition[0] << ", " << grid::Grid::sppartition[1] << ", " << grid::Grid::sppartition[2] << std::endl;
+	//std::cout << "gnbasis: " << basishost[0] << ", " << basishost[1] << ", " << basishost[2] << std::endl;
+	//std::cout << "gnbasis: " << grid::Grid::spbasis[0] << ", " << grid::Grid::spbasis[1] << ", " << grid::Grid::spbasis[2] << std::endl;
+	//std::cout << "gnknotspan: " << knotspanhost[0] << ", " << knotspanhost[1] << ", " << knotspanhost[2] << std::endl;
+	//std::cout << "gnknotspan: " << grid::Grid::spknotspan[0] << ", " << grid::Grid::spknotspan[1] << ", " << grid::Grid::spknotspan[2] << std::endl;
+	//delete[] orderhost2;
+	//delete[] partitionhost;
+	//delete[] basishost;
+	//delete[] knotspanhost;
+	//std::cout << "------------------------------------------------------ " << std::endl;
+
+}
+
+void Grid::set_spline_knot_info(void)
+{
+	cudaMemcpyToSymbol(gpu_cijk, &_gbuf.coeffs, sizeof(gpu_cijk));
+	cuda_error_check;
+
+	cudaMemcpyToSymbol(gpu_KnotSer, _gbuf.KnotSer, sizeof(gpu_KnotSer));
+	cuda_error_check;
+
+	cudaMemcpyToSymbol(gnstep, m_sStep, sizeof(gnstep));
+	cudaMemcpyToSymbol(gnBoundMin, m_3sBoundMin, sizeof(gnBoundMin));
+	cudaMemcpyToSymbol(gnBoundMax, m_3sBoundMax, sizeof(gnBoundMax));
+	cuda_error_check;
+
+#if 1
+	// update to download (OK)
+	////float penalhost[1];
+	//float stephost[3];
+	//float* Boundminhost = new float[3];
+	//float* Boundmaxhost = new float[3];
+	////cudaMemcpyFromSymbol(penalhost, power_penalty, sizeof(float));
+	//cudaMemcpyFromSymbol(stephost, gnstep, sizeof(float) * 3);
+	//cudaMemcpyFromSymbol(Boundminhost, gnBoundMin, sizeof(float) * 3);
+	//cudaMemcpyFromSymbol(Boundmaxhost, gnBoundMax, sizeof(float) * 3);
+
+	//std::cout << "-------------- spline info --------------------------- " << std::endl;
+	////std::cout << "penal: " << penalhost[0] << std::endl;
+	//std::cout << "gnStep: " << stephost[0] << ", " << stephost[1] << ", " << stephost[2] << std::endl;
+	//std::cout << "gnBoundmin: " << Boundminhost[0] << ", " << Boundminhost[1] << ", " << Boundminhost[2] << std::endl;
+	//std::cout << "gnBoundmax: " << Boundmaxhost[0] << ", " << Boundmaxhost[1] << ", " << Boundmaxhost[2] << std::endl;
+	//delete[] Boundminhost;
+	//delete[] Boundmaxhost;
+
+	//int orderhost;
+	//int* orderhost2 = new int[1];
+	//int* partitionhost = new int[3];
+	//int* basishost = new int[3];
+	//int* knotspanhost = new int[3];
+	//cudaMemcpyFromSymbol(&orderhost, gorder, sizeof(int));
+	//cudaMemcpyFromSymbol(orderhost2, gorder, sizeof(int));
+	//cudaMemcpyFromSymbol(partitionhost, gnpartition, sizeof(int) * 3);
+	//cudaMemcpyFromSymbol(basishost, gnbasis, sizeof(int) * 3);
+	//cudaMemcpyFromSymbol(knotspanhost, gnknotspan, sizeof(int) * 3);
+	//std::cout << "gnorder: " << orderhost << std::endl;
+	//std::cout << "gnorder: " << orderhost2[0] << std::endl;
+	//std::cout << "gnpartition: " << partitionhost[0] << ", " << partitionhost[1] << ", " << partitionhost[2] << std::endl;
+	//std::cout << "gnbasis: " << basishost[0] << ", " << basishost[1] << ", " << basishost[2] << std::endl;
+	//std::cout << "gnknotspan: " << knotspanhost[0] << ", " << knotspanhost[1] << ", " << knotspanhost[2] << std::endl;
+	//delete[] orderhost2;
+	//delete[] partitionhost;
+	//delete[] basishost;
+	//delete[] knotspanhost;
+	//std::cout << "------------------------------------------------------ " << std::endl;
+
+	//float* cijkhost = new float[n_cijk()];
+	//cudaMemcpyFromSymbol(cijkhost, gpu_cijk, sizeof(float) * n_cijk());
+	//cuda_error_check;
+	//gpu_manager_t::pass_buf_to_matlab("gncijk", cijkhost, n_cijk());
+
+	float* KnotSerhost[3];
+	for (int i = 0; i < 3; i++)
+	{
+		int n_basis = spknotspan[i];
+		std::cout << n_basis << std::endl;
+		KnotSerhost[i] = new float[n_basis];
+		cudaMemcpy(KnotSerhost[i], _gbuf.KnotSer[i], sizeof(float) * n_basis, cudaMemcpyDeviceToHost);
+		cuda_error_check;
+	}
+
+	gpu_manager_t::pass_buf_to_matlab("gnknotserx", KnotSerhost[0], spknotspan[0]);
+	gpu_manager_t::pass_buf_to_matlab("gnknotsery", KnotSerhost[1], spknotspan[1]);
+	gpu_manager_t::pass_buf_to_matlab("gnknotserz", KnotSerhost[2], spknotspan[2]);
+
+	for (int i = 0; i < 3; i++)
+	{
+		delete[] KnotSerhost[i];
+	}
+	delete[] KnotSerhost;
+#endif
+}
+
+template<typename coeffdensity>
+__global__ void coeff2density_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, float* g_dst, coeffdensity calc_node, const int* eidmap) {
+	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	if (tid >= nebitword) return;
+
+	const unsigned int* ebit = esat._bitarray;
+	const int* sat = esat._chunksat;
+
+	unsigned int eword = ebit[tid];
+
+	if (eword == 0) return;
+
+	int eidoffset = sat[tid];
+	int ewordoffset = 0;
+	for (int j = 0; j < BitCount<unsigned int>::value; j++) {
+		if (read_gbit(eword, j)) {
+			int bid = tid * BitCount<unsigned int>::value + j;
+			int bpos[3] = { bid % ereso, bid % (ereso * ereso) / ereso, bid / (ereso * ereso) };
+			int eid = eidoffset + ewordoffset;
+			float node_value = calc_node(bid);
+			if (eidmap != nullptr) eid = eidmap[eid];
+			g_dst[eid] = node_value;
+			ewordoffset++;
+		}
+	}
+}
+
+void Grid::coeff2density(void)
+{
+	if (_layer != 0) return;
+	// computation
+	float* cijk_value = _gbuf.coeffs;
+	float* knotx_ = _gbuf.KnotSer[0];
+	float* knoty_ = _gbuf.KnotSer[1];
+	float* knotz_ = _gbuf.KnotSer[2];
+	float* rholist = _gbuf.rho_e;
+	
+	int ereso = _ereso;
+	float eh = elementLength();
+	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+		
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
+
+	auto calc_node = [=] __device__(int id) {
+		int xCoordi = id % ereso;
+		int yCoordi = (id % (ereso * ereso)) / ereso;
+		int zCoordi = id / (ereso * ereso);
+		float pos[3] = { boxOrigin[0] + xCoordi * eh + 0.5 * eh,boxOrigin[1] + yCoordi * eh + 0.5 * eh, boxOrigin[2] + zCoordi * eh + 0.5 * eh };
+
+		float val;
+		int i, j, k, ir, it, is, index;
+
+		float pNX[m_iM + 1];
+		float pNY[m_iM + 1];
+		float pNZ[m_iM + 1];
+
+		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
+		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
+		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
+		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
+
+		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
+		{
+			val = -0.2f;
+		}
+		else
+		{
+			SplineBasisX(pos[0], pNX);
+			SplineBasisY(pos[1], pNY);
+			SplineBasisZ(pos[2], pNZ);
+
+			val = 0.0f;
+			//index = i + j * m_im + k * m_im * m_in;
+			for (ir = i - gorder[0]; ir < i; ir++)
+			{
+				for (is = j - gorder[0]; is < j; is++)
+				{
+					for (it = k - gorder[0]; it < k; it++)
+					{
+						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
+						val += gpu_cijk[index] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+					}
+				}
+			}
+		}
+		return val;
+	};
+
+	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
+
+	init_array(_gbuf.rho_e, float{ 0 }, n_gselements);
+
+	coeff2density_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, _gbuf.rho_e, calc_node, _gbuf.eidmap);
+	cudaDeviceSynchronize();
 	cuda_error_check;
 }
+
+template<typename Partical2Coeff>
+__global__ void ddensity2dcoeff_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, const float* g_sens, float* c_gens, Partical2Coeff calc_node, const int* eidmap) {
+	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	if (tid >= nebitword) return;
+
+	const unsigned int* ebit = esat._bitarray;
+	const int* sat = esat._chunksat;
+
+	unsigned int eword = ebit[tid];
+
+	if (eword == 0) return;
+
+	int eidoffset = sat[tid];
+	int ewordoffset = 0;
+	for (int j = 0; j < BitCount<unsigned int>::value; j++) {
+		if (read_gbit(eword, j)) {
+			int bid = tid * BitCount<unsigned int>::value + j;
+			int bpos[3] = { bid % ereso, bid % (ereso * ereso) / ereso, bid / (ereso * ereso) };
+			int eid = eidoffset + ewordoffset;
+			// MARK: to update
+			if (eidmap != nullptr) eid = eidmap[eid];
+			calc_node(bid, eid);
+			
+			//g_sens[eid] = node_value;
+			ewordoffset++;
+		}
+	}
+}
+
+// MARK: to do
+void Grid::ddensity2dcoeff(void)
+{
+	if (_layer != 0) return;
+	// computation
+	float* de2dc;
+	cudaMalloc(&de2dc, sizeof(n_rho() * n_cijk()));
+
+	float* dc_tmp = (float*)getTempBuf(sizeof(float) * n_cijk());
+	init_array(dc_tmp, float{ 0 }, n_cijk());
+	//cudaMemcpy(g_sens_copy, _gbuf.g_sens, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+
+	int order3 = m_iM * m_iM * m_iM;
+
+	float* coeffindex = (float*)getTempBuf(sizeof(float) * n_gselements * order3);
+	init_array(coeffindex, float{ 0 }, n_gselements * order3);
+
+	float* part2c_value = (float*)getTempBuf(sizeof(float) * n_gselements * order3);
+	init_array(part2c_value, float{ 0 }, n_gselements * order3);
+
+	float* cijk_value = _gbuf.coeffs;
+	float* knotx_ = _gbuf.KnotSer[0];
+	float* knoty_ = _gbuf.KnotSer[1];
+	float* knotz_ = _gbuf.KnotSer[2];
+	float* rholist = _gbuf.rho_e;
+	float* rho_diff = _gbuf.g_sens;
+
+	int ereso = _ereso;
+	float eh = elementLength();
+	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
+
+	auto calc_node = [=] __device__(int id, int eid) {
+		int xCoordi = id % ereso;
+		int yCoordi = (id % (ereso * ereso)) / ereso;
+		int zCoordi = id / (ereso * ereso);
+		float pos[3] = { boxOrigin[0] + xCoordi * eh + 0.5 * eh,boxOrigin[1] + yCoordi * eh + 0.5 * eh, boxOrigin[2] + zCoordi * eh + 0.5 * eh };
+
+		float val;
+		int i, j, k, ir, it, is, index;
+
+		float pNX[m_iM + 1];
+		float pNY[m_iM + 1];
+		float pNZ[m_iM + 1];
+
+		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
+		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
+		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
+		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
+
+		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
+		{
+			val = -0.2f;
+		}
+		else
+		{
+			SplineBasisX(pos[0], pNX);
+			SplineBasisY(pos[1], pNY);
+			SplineBasisZ(pos[2], pNZ);
+
+			val = 0.0f;
+			int count4coeff = 0;
+			//index = i + j * m_im + k * m_im * m_in;
+			for (ir = i - gorder[0]; ir < i; ir++)
+			{
+				for (is = j - gorder[0]; is < j; is++)
+				{
+					for (it = k - gorder[0]; it < k; it++)
+					{
+						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
+						val = rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+						coeffindex[order3 * eid + count4coeff] = index;
+						part2c_value[order3 * eid + count4coeff] = val;
+						count4coeff++;
+
+						//dc_tmp[index] = /* rho_diff[cur_element] */  pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+					}
+				}
+			}
+		}
+		return;
+	};
+
+	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
+
+	//float* g_sens_copy = (float*)getTempBuf(sizeof(float) * n_gselements);
+	//cudaMemcpy(g_sens_copy, _gbuf.g_sens, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+
+	//init_array(_gbuf.rho_e, float{ 0 }, n_gselements);
+
+	ddensity2dcoeff_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, _gbuf.g_sens, _gbuf.c_sens, calc_node, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	// MARK: to sum
+	// Memcpy to cpu 
+	float* coeffindexhost = new float[n_gselements * order3];
+	float* part2c_valuehost = new float[n_gselements * order3];
+	cudaMemcpy(coeffindexhost, coeffindex, sizeof(float)* n_gselements* order3, cudaMemcpyDeviceToHost);
+	cudaMemcpy(part2c_valuehost, part2c_value, sizeof(float)* n_gselements* order3, cudaMemcpyDeviceToHost);
+	
+	int row_tmp, indexlist_tmp;
+	float value_tmp;
+	float* c_sens = new float[n_cijk()];
+	std::fill(c_sens, c_sens + n_cijk(), 0.0f);
+	// compute in cpu
+	for (int i = 0; i < n_gselements; i++)
+	{
+		for (int j = 0; j < order3; j++)
+		{
+			indexlist_tmp = i * order3 + j;
+			row_tmp = coeffindexhost[indexlist_tmp];
+			value_tmp = part2c_valuehost[indexlist_tmp];
+			
+			if (row_tmp >= n_cijk())
+			{
+				std::cout << "\033[31m Invalid cijk index !!! \033[0m" << std::endl;
+				break;
+			}
+			c_sens[row_tmp] += value_tmp;
+		}
+	}
+
+	// upload to _gbuf.c_sens
+	cudaMemcpy(_gbuf.c_sens, c_sens, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	
+	cudaFree(dc_tmp);
+	cudaFree(coeffindex);
+	cudaFree(part2c_value);
+	delete[] coeffindexhost;
+	delete[] part2c_valuehost;
+}
+
+
+// MARK: coeff2density
+void HierarchyGrid::coeff2density(void)
+{
+	// computation
+	float* cijk_value = _gridlayer[0]->_gbuf.coeffs;
+	float* knotx_ = _gridlayer[0]->_gbuf.KnotSer[0];
+	float* knoty_ = _gridlayer[0]->_gbuf.KnotSer[1];
+	float* knotz_ = _gridlayer[0]->_gbuf.KnotSer[2];
+	int ereso = _gridlayer[0]->_ereso;
+
+
+}
+
 
 template<typename WeightRadius>
 __global__ void filterSensitivity_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, const float* g_sens, float* g_dst, float Rfilter, WeightRadius fr, const int* eidmap) {
@@ -2459,7 +3289,7 @@ void Grid::filterSensitivity(double radii)
 
 	auto fr = [=] __device__(float r) {
 		float r2 = r * r;
-		return 1 - 6 * r2 + 8 * r2 * r - 3 * r2 *r2;
+		return 1 - 6 * r2 + 8 * r2 * r - 3 * r2 * r2;
 	};
 
 	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
@@ -3134,7 +3964,7 @@ void Grid::init_coeff(double coeff)
 	// MARK
 	// To add
 	int coeff_size = n_im * n_in * n_il;
-	std::cout << " test : " << n_cijk() << std::endl;
+	//std::cout << " test : " << n_cijk() << std::endl;
 	std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
 	init_array(_gbuf.coeffs, float(coeff), coeff_size);
 }
@@ -3294,7 +4124,6 @@ void HierarchyGrid::getElementPos(Grid& g, std::vector<double>& p3host)
 	}
 }
 
-
 void HierarchyGrid::fillShell(void)
 {
 	_gridlayer[0]->use_grid();
@@ -3315,6 +4144,7 @@ void HierarchyGrid::fillShell(void)
 	cudaDeviceSynchronize();
 	cuda_error_check;
 }
+
 
 float* Grid::getlexiEbuf(float* gs_src)
 {

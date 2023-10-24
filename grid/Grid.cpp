@@ -1574,7 +1574,7 @@ size_t grid::Grid::_tmp_buf_size = 0;
 
 grid::Mode grid::Grid::_mode;
 
-size_t grid::Grid::n_order = 0;       // The order of implicit spline
+int grid::Grid::n_order = 0;       // The order of implicit spline
 size_t grid::Grid::n_partitionx = 0;  // The number of partition of X,Y,Z direction
 size_t grid::Grid::n_partitiony = 0;
 size_t grid::Grid::n_partitionz = 0;
@@ -1584,7 +1584,13 @@ size_t grid::Grid::n_il;
 size_t grid::Grid::n_knotspanx;       // The number of knot of X,Y,Z direction
 size_t grid::Grid::n_knotspany;
 size_t grid::Grid::n_knotspanz;
+int grid::Grid::sppartition[3];
+int grid::Grid::spbasis[3];
+int grid::Grid::spknotspan[3];
 
+float grid::Grid::m_sStep[3];
+float grid::Grid::m_3sBoundMin[3];
+float grid::Grid::m_3sBoundMax[3];
 
 const std::string& Grid::getOutDir(void)
 {
@@ -1975,11 +1981,17 @@ size_t grid::Grid::build(
 
 	// finest layer
 	if (layer == 0) {
-		_gbuf.rho_e = (float*)gm.add_buf(_name + "rho_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
-		_gbuf.coeffs = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		_gbuf.rho_e = (float*)gm.add_buf(_name + "rho_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;		
 		_gbuf.eActiveBits = (unsigned int*)gm.add_buf(_name + "eActiveBits", sizeof(unsigned int)*ebit._bitArray.size(), ebit._bitArray.data()); gbuf_size += sizeof(unsigned int) * ebit._bitArray.size();
 		_gbuf.eActiveChunkSum = (int*)gm.add_buf(_name + "eActiveChunkSum", sizeof(int)*ebit._chunkSat.size(), ebit._chunkSat.data()); gbuf_size += sizeof(int) * ebit._chunkSat.size();
 		_gbuf.nword_ebits = ebit._bitArray.size();
+
+		_gbuf.coeffs = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		for (int i = 0; i < 3; i++)
+		{
+			_gbuf.KnotSer[i] = (float*)gm.add_buf(_name + "KnotSer " + std::to_string(i), sizeof(float) * spknotspan[i]); gbuf_size += sizeof(float) * spknotspan[i];
+		}
+		
 	}
 
 	// allocate v2e topology buffer 
@@ -2031,6 +2043,8 @@ size_t grid::Grid::build(
 	if (_layer == 0) {
 		_gbuf.g_sens = (float*)gm.add_buf(_name + " g_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		_gbuf.c_sens = (float*)gm.add_buf(_name + " c_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		//_gbuf.de2dc = (float*)gm.add_buf(_name + " de2dc ", sizeof(float) * ne_gs * n_im * n_in * n_il); gbuf_size += sizeof(float) * ne_gs * n_im * n_in * n_il;
+
 	}
 
 	// allocate bitflag buffer for vertex and element
@@ -2160,6 +2174,133 @@ void grid::Grid::readSupportForce(std::string fsfile)
 
 }
 
+void grid::Grid::set_spline_knot_series(void)
+{
+	int i, j, k;
+	float tmp;
+	float scale_bound = 2.0f;
+	int sorder = n_order;
+	int spartx = n_partitionx;
+	int sparty = n_partitiony;
+	int spartz = n_partitionz;
+
+	for (int i = 0; i < 3; i++)
+	{
+		m_3sBoundMin[i] = _box[0][i];
+		m_3sBoundMax[i] = _box[1][i];
+	}
+
+	// enlarge the bound
+	float deltax = m_3sBoundMax[0] - m_3sBoundMin[0];	
+	m_3sBoundMax[0] += scale_bound * deltax / (float)(spartx + 1);
+	m_3sBoundMin[0] -= scale_bound * deltax / (float)(spartx + 1);
+	float deltay = m_3sBoundMax[1] - m_3sBoundMin[1];
+	m_3sBoundMax[1] += scale_bound * deltay / (float)(sparty + 1);
+	m_3sBoundMin[1] -= scale_bound * deltay / (float)(sparty + 1);
+	float deltaz = m_3sBoundMax[2] - m_3sBoundMin[2];
+	m_3sBoundMax[2] += scale_bound * deltaz / (float)(spartz + 1);
+	m_3sBoundMin[2] -= scale_bound * deltaz / (float)(spartz + 1);
+
+	// calculate the step
+	m_sStepX = (m_3sBoundMax[0] - m_3sBoundMin[0]) / (float)(spartx + 1);
+	m_sStepY = (m_3sBoundMax[1] - m_3sBoundMin[1]) / (float)(sparty + 1);
+	m_sStepZ = (m_3sBoundMax[2] - m_3sBoundMin[2]) / (float)(spartz + 1);
+
+	m_sStep[0] = m_sStepX;
+	m_sStep[1] = m_sStepY;
+	m_sStep[2] = m_sStepZ;
+
+	{
+		// X knot series
+		tmp = m_3sBoundMin[0];
+		for (i = 0; i < sorder; i++)
+		{
+			KnotSer[0].push_back(m_3sBoundMin[0]);
+		}
+		for (i = sorder; i < sorder + spartx; i++)
+		{
+			tmp += m_sStepX;
+			KnotSer[0].push_back(tmp);
+		}
+		for (i = sorder + spartx; i < 2 * sorder + spartx; i++)
+		{
+			KnotSer[0].push_back(m_3sBoundMax[0]);
+		}
+
+		// Y knot series 
+		tmp = m_3sBoundMin[1];
+		for (i = 0; i < sorder; i++)
+		{
+			KnotSer[1].push_back(m_3sBoundMin[1]);
+		}
+		for (i = sorder; i < sorder + sparty; i++)
+		{
+			tmp += m_sStepY;
+			KnotSer[1].push_back(tmp);
+		}
+		for (i = sorder + sparty; i < 2 * sorder + sparty; i++)
+		{
+			KnotSer[1].push_back(m_3sBoundMax[1]);
+		}
+
+		// Z knot series
+		tmp = m_3sBoundMin[2];
+		for (i = 0; i < sorder; i++)
+		{
+			KnotSer[2].push_back(m_3sBoundMin[2]);
+		}
+		for (i = sorder; i < sorder + spartz; i++)
+		{
+			tmp += m_sStepZ;
+			KnotSer[2].push_back(tmp);
+		}
+		for (i = sorder + spartz; i < 2 * sorder + spartz; i++)
+		{
+			KnotSer[2].push_back(m_3sBoundMax[2]);
+		}
+	}
+
+	//std::cout << "Step: " << m_sStep[0] << ", " << m_sStep[1] << ", " << m_sStep[2] << std::endl;
+	//std::cout << "Boundmin: " << m_3sBoundMin[0] << ", " << m_3sBoundMin[1] << ", " << m_3sBoundMin[2] << std::endl;
+	//std::cout << "Boundmax: " << m_3sBoundMax[0] << ", " << m_3sBoundMax[1] << ", " << m_3sBoundMax[2] << std::endl;
+
+	// upload to device
+	for (int i = 0; i < 3; i++)
+	{
+		gpu_manager_t::upload_buf(_gbuf.KnotSer[i], KnotSer[i].data(), sizeof(float) * spknotspan[i]);
+	}
+
+	// download to host
+	std::vector<float> KnotSer_host[3];
+
+	for (int i = 0; i < 3; i++)
+	{
+		KnotSer_host[i].resize(spknotspan[i]);
+		gpu_manager_t::download_buf(KnotSer_host[i].data(), _gbuf.KnotSer[i], sizeof(float) * spknotspan[i]);
+	}
+#if 0
+#ifdef ENABLE_MATLAB
+	Eigen::VectorXf KnotSer_x;
+	KnotSer_x.resize(spknotspan[0]);
+	std::copy(KnotSer_host[0].begin(), KnotSer_host[0].end(), KnotSer_x.data());
+	eigen2ConnectedMatlab("Knotspanx", KnotSer_x);
+
+	Eigen::VectorXf KnotSer_y;
+	KnotSer_y.resize(spknotspan[1]);
+	std::copy(KnotSer_host[1].begin(), KnotSer_host[1].end(), KnotSer_y.data());
+	eigen2ConnectedMatlab("Knotspany", KnotSer_y);
+
+	Eigen::Matrix<float, -1, 1> KnotSer_z(spknotspan[2], 1);
+	for (int i = 0; i < spknotspan[2]; i++)
+	{
+		KnotSer_z(i, 1) = KnotSer_host[2][i];
+	}
+	eigen2ConnectedMatlab("Knotspanz", KnotSer_z);
+#endif
+#endif
+}
+
+
 void grid::Grid::readDisplacement(std::string displacementfile)
 {
 	std::vector<double> uhost;
@@ -2275,6 +2416,11 @@ void Grid::vlexibuf2matlab(const std::string& nam, double* p_gsbuf)
 void Grid::sens2matlab(const std::string& nam)
 {
 	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.g_sens, n_rho());
+}
+
+void Grid::csens2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.c_sens, n_cijk());
 }
 
 void Grid::v2vcoarse2matlab(const std::string& nam)

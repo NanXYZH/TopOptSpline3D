@@ -46,6 +46,25 @@ void Cal_Normal_3D(const Vec3d& v1, const Vec3d& v2, const Vec3d& v3, Vec3d& vn)
 
 int main()
 {
+
+	int x = 10;
+	int y = 20;
+
+
+	x = 11;
+	y = 21;
+	// 按值捕获x和y
+	auto lambda = [=]() {
+		std::cout << "x: " << x << ", y: " << y << std::endl;
+	};
+
+	lambda(); // 输出 x: 10, y: 20
+
+	x = 100;
+	y = 200;
+
+	lambda();
+
 	int num = 42;
 	int width = 10;
 	printf("Integer number: %*d, %*d\n", width, num, width, num + 1);

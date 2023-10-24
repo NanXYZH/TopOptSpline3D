@@ -86,6 +86,9 @@ void initDensities(double rho);
 
 void initCoeffs(double coeff);
 
+// MARK
+void Coeff2Density(void);
+
 void update_stencil(void);
 
 void test_rigid_displacement(void);

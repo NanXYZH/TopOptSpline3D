@@ -682,11 +682,15 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	grids.writeNodePos(grids.getPath("nodepos"), *grids[0]);
 	grids.writeElementPos(grids.getPath("elepos"), *grids[0]);
 
-	// MARK: ADD user-defined input
-	initCoeffs(1);		
+#if 1
+	// MARK: ADD user-defined input	
+	initCoeffs(params.volume_ratio);		
+	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
-
-#if 1	
+	grids[0]->set_spline_knot_info();
+	grids[0]->coeff2density();
+	float Vgoal = params.volume_ratio;
+#elif 0	
 	initDensities(params.volume_ratio);
 	float Vgoal = params.volume_ratio;
 #else

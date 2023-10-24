@@ -13,6 +13,8 @@
 #include "set"
 #include <memory>
 
+constexpr static int m_iM = 3;                                       // The order of implicit spline
+
 namespace grid {
 
 	class HierarchyGrid;
@@ -180,7 +182,7 @@ namespace grid {
 		static const std::string& getOutDir(void);
 		static void* getTempBuf(size_t requre);
 
-		static size_t n_order;       // The order of implicit spline
+		static int n_order;       // The order of implicit spline
 		static size_t n_partitionx;  // The number of partition of X,Y,Z direction
 		static size_t n_partitiony;
 		static size_t n_partitionz;
@@ -190,6 +192,15 @@ namespace grid {
 		static size_t n_knotspanx;   // The number of knot of X,Y,Z direction
 		static size_t n_knotspany;
 		static size_t n_knotspanz;
+		static int sppartition[3];
+		static int spbasis[3];
+		static int spknotspan[3];
+		static float m_sStep[3];
+		static float m_3sBoundMin[3], m_3sBoundMax[3];
+
+		// spline
+		std::vector<float> KnotSer[3];                                     // The knot series of X, Y, Z direction 
+		float m_sStepX, m_sStepY, m_sStepZ;		                     	// The step of knot series of X,Y,Z direction 
 
 		template<typename T>
 		static void getTempBufArray(T** pbufs, int n_buf, size_t requre4each) {
@@ -206,6 +217,8 @@ namespace grid {
 		std::string _name;
 		struct {
 			float* coeffs;
+			//float* de2dc;
+			float* KnotSer[3];
 			float* rho_e;
 			int * v2e[8];
 			int* v2vfine[27];
@@ -245,8 +258,7 @@ namespace grid {
 		int n_elements = 0;
 		int n_gsvertices = 0;
 		int n_gselements = 0;
-
-		
+				
 		std::map<std::string, double> _keyvalues;
 
 		std::vector<int> _v2v[27];
@@ -466,7 +478,6 @@ namespace grid {
 
 		void init_coeff(double coeff);
 
-		// MARK 
 		void init_rholist(float* rh0);
 
 		void init_coefflist(float* coeff);
@@ -490,6 +501,16 @@ namespace grid {
 		void readSupportForce(std::string fsfile);
 
 		void readDisplacement(std::string displacementfile);
+
+		// about spline
+		// MARK£ºto do
+		void set_spline_knot_series(void);
+
+		void set_spline_knot_info(void);
+				
+		void coeff2density(void);
+
+		void ddensity2dcoeff(void);
 
 		double unitizeForce(void);
 
@@ -532,6 +553,8 @@ namespace grid {
 		bool hasSupport(void) { return _mode == with_support_constrain_force_direction || _mode == with_support_free_force; }
 
 		void sens2matlab(const std::string& nam);
+
+		void csens2matlab(const std::string& nam);
 
 		void v2v2matlab(const std::string& nam);
 
@@ -645,7 +668,6 @@ namespace grid {
 		// about spline
 		void coeff2density(void);
 
-
 		// log file
 		void log(int itn);
 
@@ -715,6 +737,7 @@ namespace grid {
 
 		void writeSensitivity(const std::string& filename);
 
+		// MARK: need to be rewrite
 		void readCoeff(const std::string& filename);
 
 		void writeCoeff(const std::string& filename);

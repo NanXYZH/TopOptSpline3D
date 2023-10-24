@@ -35,6 +35,12 @@ extern  __constant__ int gorder[1];
 extern  __constant__ int gnpartition[3];
 extern  __constant__ int gnbasis[3];
 extern  __constant__ int gnknotspan[3];
+extern  __constant__ float gnstep[3];
+extern  __constant__ float gnBoundMin[3];
+extern  __constant__ float gnBoundMax[3];
+
+extern  __constant__  float* gpu_KnotSer[3];
+extern  __constant__  float* gpu_cijk;
 
 
 
@@ -135,6 +141,12 @@ void computeSensitivity(void) {
 
 	// DEBUG
 	grids[0]->sens2matlab("sensfilt");
+
+	// rho_diff 2 coeff_diff
+	grids[0]->ddensity2dcoeff();
+
+	// DEBUG
+	grids[0]->csens2matlab("csenstest");
 }
 
 
@@ -353,7 +365,6 @@ void setDEBUG(bool debug)
 	if (debug) a = 1;
 	cudaMemcpyToSymbol(gDEBUG, &a, sizeof(int));
 }
-
 
 __global__ void checkAjointKernel(int n_gsvertices, double mu, devArray_t<double*, 3> vdst) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;

@@ -73,6 +73,8 @@ public:
 
 	static void pass_dev_buf_to_matlab(const char* name, Scaler* dev_ptr, int ldd, size_t n);
 
+	static void pass_buf_to_matlab(const char* name, float* host_ptr, size_t n);
+
 	static void pass_buf_to_matlab(const char* name, Scaler* host_ptr, size_t n);
 
 	static void pass_buf_to_matlab(const char* name, int* host_ptr, size_t n);

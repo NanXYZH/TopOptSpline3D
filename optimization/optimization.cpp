@@ -731,7 +731,11 @@ void initCoeffs(double coeff)
 	grids[0]->init_coefflist(coeff_noise);
 	delete[] coeff_noise;
 #endif
+}
 
+void Coeff2Density()
+{
+	grids.coeff2density();
 }
 
 void update_stencil(void)

@@ -508,6 +508,6 @@ void config_parser_t::parse(int argc, char** argv)
 	inLoadArea = loadArea.generate();
 	inFixArea = fixArea.generate();
 	loadField = force_field.generate();
-	readMesh(FLAGS_meshfile, mesh_vertices, mesh_faces);
+ 	readMesh(FLAGS_meshfile, mesh_vertices, mesh_faces);
 }
 

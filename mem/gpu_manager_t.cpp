@@ -73,6 +73,16 @@ void gpu_manager_t::pass_dev_buf_to_matlab(const char* name, const int* dev_ptr,
 #endif
 }
 
+void gpu_manager_t::pass_buf_to_matlab(const char* name, float* host_ptr, size_t n)
+{
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<float, -1, 1> mat_buf;
+	mat_buf.resize(n, 1);
+	std::copy(host_ptr, host_ptr + n, mat_buf.begin());
+	eigen2ConnectedMatlab(name, mat_buf);
+#endif
+}
+
 void gpu_manager_t::pass_buf_to_matlab(const char* name, Scaler* host_ptr, size_t n)
 {
 #ifdef ENABLE_MATLAB

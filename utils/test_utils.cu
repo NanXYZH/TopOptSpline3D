@@ -28,6 +28,12 @@ extern  __constant__ int gorder[1];
 extern  __constant__ int gnpartition[3];
 extern  __constant__ int gnbasis[3];
 extern  __constant__ int gnknotspan[3];
+extern  __constant__ float gnstep[3];
+extern  __constant__ float gnBoundMin[3];
+extern  __constant__ float gnBoundMax[3];
+
+extern  __constant__  float* gpu_KnotSer[3];
+extern  __constant__  float* gpu_cijk;
 
 
 void TestSuit::setDensity(float* newrho)
