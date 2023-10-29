@@ -24,6 +24,8 @@ struct Parameter {
 	int partitiony;
 	int partitionz;
 	int spline_order;
+	float min_cijk;
+	float max_cijk;
 };
 
 extern Parameter params;
@@ -37,7 +39,7 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order);
+	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order, float min_cijk, float max_cijk);
 
 void setOutpurDir(const std::string& dirname);
 
@@ -72,6 +74,8 @@ void computeSensitivity(void);
 bool checkAdjointVariable(void);
 
 float updateDensities(float Vgoal);
+
+float updateCoeff(float Vgoal);
 
 void optimization(void);
 

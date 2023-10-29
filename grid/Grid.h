@@ -184,7 +184,6 @@ namespace grid {
 		static void* getTempBuf1(size_t requre);
 		static void* getTempBuf2(size_t requre);
 
-
 		static void* _tmp_buf1;
 		static size_t _tmp_buf1_size;
 		static void* _tmp_buf2;
@@ -276,6 +275,11 @@ namespace grid {
 		int gs_num[8];
 
 		int _ereso = 0;
+
+		float _min_density = 1e-3;
+
+		float _min_coeff = 0.f;
+		float _max_coeff = 1.0f;
 
 		Grid* fineGrid = nullptr;
 		Grid* coarseGrid = nullptr;
@@ -426,6 +430,8 @@ namespace grid {
 
 		float* getSens(void) { return _gbuf.g_sens; }
 
+		float* getCSens(void) { return _gbuf.c_sens; }
+
 		double** getWorstForce(void) { return _gbuf.Fworst; }
 
 		double** getWorstDisplacement(void) { return _gbuf.Uworst; }
@@ -449,6 +455,7 @@ namespace grid {
 			int vreso,
 			int layer,
 			int nv, int ne,
+			float mincoeff, float maxcoeff,
 			int * v2ehost[8],
 			int * v2vfinehost[27], 
 			int * v2vcoarsehost[8],
@@ -622,6 +629,9 @@ namespace grid {
 			int n_knotspany;
 			int n_knotspanz;
 
+			float min_coeff;
+			float max_coeff;
+
 		}_setting;
 
 		int _nlayer = 0;
@@ -635,6 +645,8 @@ namespace grid {
 		std::function<Eigen::Matrix<double, 3, 1>(double[3])> _loadField;
 
 		std::string _outdir;
+
+		float _min_density;
 
 		Mode _mode;
 
@@ -696,6 +708,10 @@ namespace grid {
 		static std::string getModeStr(Mode mode);
 
 		//void uploadTemplateMatrix(double element_len);
+
+		void set_min_density(float min_density) { _min_density = min_density; }
+
+		void set_spline_coeff_bound(float min_coeff, float max_coeff) { _setting.min_coeff = min_coeff; _setting.max_coeff = max_coeff; }
 
 		void set_spline_order(int sorder) { _setting.n_order = sorder;  }
 

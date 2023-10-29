@@ -14,7 +14,7 @@ Parameter params;
 
 void buildGrids(const std::vector<float>& coords, const std::vector<int>& trifaces) 
 {
-	grids.lambdatest();
+	//grids.lambdatest();
 
 	grids.set_prefer_reso(params.gridreso);
 	grids.set_skip_layer(true);
@@ -35,7 +35,7 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order
+	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order, float min_coeff, float max_coeff
 ) {
 	params.volume_ratio = volRatio;
 	params.volume_decrease = volDecrease;
@@ -51,6 +51,10 @@ void setParameters(
 	params.partitiony = partitiony;
 	params.partitionz = partitionz;
 	params.spline_order = spline_order;
+	params.min_cijk = min_coeff;
+	params.max_cijk = max_coeff;
+	grids.set_min_density(min_density);
+	grids.set_spline_coeff_bound(min_coeff, max_coeff);
 	grids.set_spline_order(spline_order);
 	grids.set_spline_partition(partitionx, partitiony, partitionz, spline_order);
 	grids.set_shell_width(shell_width);

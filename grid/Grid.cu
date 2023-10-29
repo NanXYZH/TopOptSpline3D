@@ -2966,7 +2966,7 @@ void Grid::set_spline_knot_info(void)
 }
 
 template<typename coeffdensity>
-__global__ void coeff2density_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, float* g_dst, coeffdensity calc_node, const int* eidmap) {
+__global__ void coeff2density_kernel(int nebitword, float mindensity, gBitSAT<unsigned int> esat, int ereso, float* g_dst, coeffdensity calc_node, const int* eidmap, const int* eflag) {
 	int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tid >= nebitword) return;
 
@@ -2986,6 +2986,15 @@ __global__ void coeff2density_kernel(int nebitword, gBitSAT<unsigned int> esat, 
 			int eid = eidoffset + ewordoffset;
 			float node_value = calc_node(bid);
 			if (eidmap != nullptr) eid = eidmap[eid];
+
+			// check the shellelement of rho_e
+			node_value = clamp(node_value, mindensity, 1.f);
+			if (eflag[eid] & grid::Grid::mask_shellelement)
+			{
+				node_value = 1;
+			}
+	     	// rhoknew = clamp(rhoknew, rhomin, 1.f);
+	     	// if (gEflag[0][eid] & grid::Grid::Bitmask::mask_shellelement) rhonew = 1;
 			g_dst[eid] = node_value;
 			ewordoffset++;
 		}
@@ -3005,6 +3014,7 @@ void Grid::coeff2density(void)
 	int ereso = _ereso;
 	float eh = elementLength();
 	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+	float min_Density = _min_density;
 		
 	size_t grid_size, block_size;
 	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
@@ -3051,6 +3061,9 @@ void Grid::coeff2density(void)
 				}
 			}
 		}
+		// MARK[TODO] : restrict the density bound
+		// rhoknew = clamp(rhoknew, rhomin, 1.f);
+     	// if (gEflag[0][eid] & grid::Grid::Bitmask::mask_shellelement) rhonew = 1;
 		return val;
 	};
 
@@ -3058,8 +3071,15 @@ void Grid::coeff2density(void)
 
 	init_array(_gbuf.rho_e, float{ 0 }, n_gselements);
 
-	coeff2density_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, _gbuf.rho_e, calc_node, _gbuf.eidmap);
+	coeff2density_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, min_Density, esat, _ereso, _gbuf.rho_e, calc_node, _gbuf.eidmap, _gbuf.eBitflag);
 	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float* rhohost = new float[n_gselements];
+	//cudaMemcpy(rhohost, _gbuf.rho_e, n_gselements, cudaMemcpyDeviceToHost);
+	gpu_manager_t::download_buf(rhohost, _gbuf.rho_e, sizeof(float)* n_gselements);
+	cuda_error_check;
+	gpu_manager_t::pass_buf_to_matlab("rhoe1", rhohost, n_gselements);
 	cuda_error_check;
 }
 
@@ -3131,6 +3151,7 @@ void Grid::ddensity2dcoeff(void)
 	float* rholist = _gbuf.rho_e;
 	float* rho_diff = _gbuf.g_sens;
 	int* eidmap = _gbuf.eidmap;
+	int* eflag = _gbuf.eBitflag;
 
 	int ereso = _ereso;
 	float eh = elementLength();
@@ -3177,9 +3198,17 @@ void Grid::ddensity2dcoeff(void)
 					for (it = k - gorder[0]; it < k; it++)
 					{
 						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
-						val = rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 						coeffindex[order3 * eid + count4coeff] = index;
-						part2c_value[order3 * eid + count4coeff] = val;
+						if (eflag[eid] & grid::Grid::mask_shellelement)
+						{
+							part2c_value[order3 * eid + count4coeff] = 0;
+						}
+						else
+						{
+							val = rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							part2c_value[order3 * eid + count4coeff] = val;
+
+						}
 						count4coeff++;
 						//dc_tmp[index] = /* rho_diff[cur_element] */  pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 					}
@@ -3201,7 +3230,7 @@ void Grid::ddensity2dcoeff(void)
 	cudaMemcpy(coeffindexhost, coeffindex, sizeof(int)* n_gselements * order3, cudaMemcpyDeviceToHost);
 	cudaMemcpy(part2c_valuehost, part2c_value, sizeof(float)* n_gselements * order3, cudaMemcpyDeviceToHost);
 	cuda_error_check;
-	
+
 	int row_tmp, indexlist_tmp;
 	float value_tmp;
 	float* c_sens = new float[n_cijk()];
@@ -3237,9 +3266,7 @@ void Grid::ddensity2dcoeff(void)
 	cudaFree(de2dc);
 	cudaFree(coeffindex);
 	cudaFree(part2c_value);
-	clearBuf();
-	clearBuf1();
-	clearBuf2();
+	//clearBuf();
 	delete[] coeffindexhost;
 	delete[] part2c_valuehost;
 

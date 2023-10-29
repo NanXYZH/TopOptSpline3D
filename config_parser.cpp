@@ -37,6 +37,10 @@ DEFINE_int32(max_itn, 100, "Maximal iteration number");
 
 DEFINE_double(min_density, 1e-3, "Minimal density restriction");
 
+DEFINE_double(min_coeff, 0, "Minimal coeff restriction");
+
+DEFINE_double(max_coeff, 1, "Minimal coeff restriction");
+
 DEFINE_double(poisson_ratio, 0.4, "Material Poisson Ratio");
 
 DEFINE_double(shell_width, 3, "Shell width in the unit of element");
@@ -486,6 +490,8 @@ void output_option(void) {
 	std::cout << " =partitiony       - - - - - - - - - - - - - - - -   " << FLAGS_partitiony << std::endl;
 	std::cout << " =partitionz       - - - - - - - - - - - - - - - -   " << FLAGS_partitionz << std::endl;
 	std::cout << " =spline_order     - - - - - - - - - - - - - - - -   " << FLAGS_spline_order << std::endl;
+	std::cout << " =min_ceoff        - - - - - - - - - - - - - - - -   " << FLAGS_min_coeff << std::endl;
+	std::cout << " =max_ceoff        - - - - - - - - - - - - - - - -   " << FLAGS_max_coeff << std::endl;
 	std::cout << " =enable_log       - - - - - - - - - - - - - - - -   " << (FLAGS_enable_log ? "Yes" : "No") << std::endl;
 	std::cout << " =max_itn          - - - - - - - - - - - - - - - -   " << FLAGS_max_itn << std::endl;
 	std::cout << " =min_density      - - - - - - - - - - - - - - - -   " << FLAGS_min_density << std::endl;

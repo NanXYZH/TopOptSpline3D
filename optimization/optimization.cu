@@ -146,7 +146,7 @@ void computeSensitivity(void) {
 	grids[0]->ddensity2dcoeff();
 
 	// DEBUG
-	grids[0]->csens2matlab("csenstest");
+	grids[0]->csens2matlab("csensfilt");
 }
 
 
@@ -191,11 +191,16 @@ float updateDensities(float Vgoal) {
 
 	// compute old volume ratio
 	double* sum = (double*)grid::Grid::getTempBuf(sizeof(double) * grids[0]->n_rho() / 100);
+	cuda_error_check;
 	double Vold = parallel_sum_d(grids[0]->getRho(), sum, grids[0]->n_rho()) / grids[0]->n_rho();
+	cuda_error_check;
+	std::cout << " test vold : " << Vold << std::endl;
 
 	// compute maximal sensitivity
 	float* maxdump = (float*)grid::Grid::getTempBuf(sizeof(float)* grids[0]->n_rho() / 100);
 	float g_max = parallel_maxabs(grids[0]->getSens(), maxdump, grids[0]->n_rho());
+	cuda_error_check;
+	std::cout << " test gmax : " << g_max << std::endl;
 
 	g_thres_upp = g_max;
 
@@ -241,6 +246,131 @@ float updateDensities(float Vgoal) {
 	
 	return g_thres;
 }
+
+
+__global__ void tryCSensMultiplier_kernel(
+	int nc, const float* cijklist, float* c_sens, float c_thres, float step, float damp, float cijkmin, float cijkmax, float* newcijk) {
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid >= nc) return;
+
+	//int eid = gV2E[7][tid];
+
+	//if (eid == -1) { return; }
+
+	float c = c_sens[tid];
+
+	if (c > 0) c = 0;
+
+	c = abs(c);
+
+	float cijkold = cijklist[tid];
+
+	float cijknew = cijkold * powf(c / c_thres, damp);
+
+	cijknew = clamp(cijknew, cijkold - step, cijkold + step);
+
+	cijknew = clamp(cijknew, cijkmin, cijkmax);
+
+	// MARK[TODO]: move this to computation of rho
+	// rhoknew = clamp(rhoknew, rhomin, 1.f);
+	// if (gEflag[0][eid] & grid::Grid::Bitmask::mask_shellelement) rhonew = 1;
+
+	newcijk[tid] = cijknew;
+}
+
+float updateCoeff(float Vgoal) {
+	grids[0]->use_grid();
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, grids[0]->n_nodes(), 512);
+
+	float Vratio = 2;
+
+	float g_thres_low = 0;
+	float g_thres_upp = 1;
+
+	// compute old volume ratio
+	double* sum = (double*)grid::Grid::getTempBuf(sizeof(double) * grids[0]->n_rho() / 100);
+	cuda_error_check;
+	double Vold = parallel_sum_d(grids[0]->getRho(), sum, grids[0]->n_rho()) / grids[0]->n_rho();
+	cuda_error_check;
+
+	std::cout << " test vold : " << Vold << std::endl;
+	grid::Grid::clearBuf();
+	cuda_error_check;
+
+	// compute maximal sensitivity
+	float* maxdump = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_cijk() / 100);
+	cuda_error_check;
+	float g_max = parallel_maxabs(grids[0]->getCSens(), maxdump, grids[0]->n_cijk());
+	std::cout << " test g_max : " << g_max << std::endl;
+	cuda_error_check;
+	grid::Grid::clearBuf();
+	cuda_error_check;
+
+	g_thres_upp = g_max;
+
+	printf("[sensitivity] max = %f\n", g_max);
+
+	float g_thres = (g_thres_low + g_thres_upp) / 2;
+
+	// iteration counter
+	int itn = 0;
+
+	// bisection search sensitivity multiplier
+	do {
+		// update sensitivity threshold
+		g_thres = (g_thres_low + g_thres_upp) / 2;
+
+		printf("-- searching multiplier g = %4.4e", g_thres);
+
+		float* newcijk = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_cijk());
+
+		// update new rho
+		// MARK[TODO] change to rho
+		tryCSensMultiplier_kernel << <grid_size, block_size >> > (
+			grids[0]->n_cijk(), grids[0]->getCoeff(), grids[0]->getCSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, newcijk);
+		cudaDeviceSynchronize();
+		cuda_error_check;
+
+		//// update new rho
+		//tryCSensMultiplier_kernel << <grid_size, block_size >> > (
+		//	grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.max_cijk, params.max_cijk, newcijk);
+		//cudaDeviceSynchronize();
+		//cuda_error_check;
+
+		// MARK[TODO] add coeff 2 rho
+		grids[0]->coeff2density();
+		float* newrho = grids[0]->getRho();
+
+		// compute new volume ratio
+		Vratio = dump_array_sum(newrho, grids[0]->n_rho()) / grids[0]->n_rho();
+
+		printf(", V = %f  goal %f\n", Vratio, Vgoal);
+
+		if (Vratio > Vgoal) {
+			g_thres_low = g_thres;
+		}
+		else if (Vratio < Vgoal) {
+			g_thres_upp = g_thres;
+		}
+	} while (abs(Vratio - Vgoal) > 1e-4 && itn++ < 30);
+
+	// update densities according to new sensitivity
+	tryCSensMultiplier_kernel << <grid_size, block_size >> > (
+		grids[0]->n_cijk(), grids[0]->getCoeff(), grids[0]->getCSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, grids[0]->getCoeff());
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	grids[0]->coeff2density();
+
+	//// update densities according to new sensitivity
+	//tryCSensMultiplier_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, grids[0]->getRho());
+	//cudaDeviceSynchronize();
+	//cuda_error_check;
+
+	return g_thres;
+}
+
 
 
 extern void matlab_utils_test(void);

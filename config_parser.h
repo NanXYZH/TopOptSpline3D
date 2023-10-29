@@ -51,6 +51,10 @@ DECLARE_int32(max_itn);
 
 DECLARE_double(min_density);
 
+DECLARE_double(min_coeff);
+
+DECLARE_double(max_coeff);
+
 DECLARE_double(poisson_ratio);
 
 DECLARE_double(shell_width);

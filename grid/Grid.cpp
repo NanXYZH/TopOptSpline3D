@@ -604,11 +604,13 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 		grd->_inLoadArea = _inLoadArea;
 		grd->_loadField = _loadField;
 
+		grd->_min_density = _min_density;
+
 		for (int i = 0; i < 6; i++) {
 			(&grd->_box[0][0])[i] = (&out_box[0][0])[i];
 		}
 
-		grd->build(get_gmem(), vrtsatlist[i], elesatlist[i], finer, resolist[i] + 1, i, nv, ne, v2e, v2vfine, v2vcoarse, v2v, v2vfineclist, vbitflag, ebitflag);
+		grd->build(get_gmem(), vrtsatlist[i], elesatlist[i], finer, resolist[i] + 1, i, nv, ne, _setting.min_coeff, _setting.max_coeff, v2e, v2vfine, v2vcoarse, v2v, v2vfineclist, vbitflag, ebitflag);
 
 		if (i == elesatlist.size() - 1) grd->getV2V();
 
@@ -869,7 +871,7 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<unsigned int> &solid_bit
 			(&grd->_box[0][0])[i] = (&out_box[0][0])[i];
 		}
 
-		grd->build(get_gmem(), vrtsatlist[i], elesatlist[i], finer, resolist[i] + 1, i, nv, ne, v2e, v2vfine, v2vcoarse, v2v, v2vfineclist, vbitflag, ebitflag);
+		grd->build(get_gmem(), vrtsatlist[i], elesatlist[i], finer, resolist[i] + 1, i, nv, ne, _setting.min_coeff, _setting.max_coeff, v2e, v2vfine, v2vcoarse, v2v, v2vfineclist, vbitflag, ebitflag);
 
 		if (i == elesatlist.size() - 1) grd->getV2V();
 
@@ -1569,15 +1571,14 @@ void Grid::setOutDir(const std::string& outdir)
 std::string grid::Grid::_outdir;
 
 void* grid::Grid::_tmp_buf = nullptr;
-
 size_t grid::Grid::_tmp_buf_size = 0;
-
-grid::Mode grid::Grid::_mode;
-
 void* grid::Grid::_tmp_buf1 = nullptr;
 size_t grid::Grid::_tmp_buf1_size = 0;
 void* grid::Grid::_tmp_buf2 = nullptr;
 size_t grid::Grid::_tmp_buf2_size = 0;
+
+grid::Mode grid::Grid::_mode;
+
 int grid::Grid::n_order = 0;       // The order of implicit spline
 size_t grid::Grid::n_partitionx = 0;  // The number of partition of X,Y,Z direction
 size_t grid::Grid::n_partitiony = 0;
@@ -1921,6 +1922,7 @@ size_t grid::Grid::build(
 	int vreso,
 	int layer,
 	int nv, int ne,
+	float mincoeff, float maxcoeff,
 	int * v2ehost[8],
 	int * v2vfinehost[27],
 	int * v2vcoarsehost[8],
@@ -1963,8 +1965,10 @@ size_t grid::Grid::build(
 	n_gselements = ne_gs; // correct to mod32 == 0
 	n_gsvertices = nv_gs; // correct to mod32 == 0
 
-	size_t gbuf_size = 0;
+	_min_coeff = mincoeff;
+	_max_coeff = maxcoeff;
 
+	size_t gbuf_size = 0;
 	
 	int* vidmap = (int*)gm.add_buf(_name + " vid map ", sizeof(int) * nv, vlexi2gs.data(), sizeof(int) * nv); gbuf_size += sizeof(int) * nv;
 	int* eidmap = (int*)gm.add_buf(_name + " eid map ", sizeof(int) * ne, elexi2gs.data(), sizeof(int) * ne); gbuf_size += sizeof(int) * ne;

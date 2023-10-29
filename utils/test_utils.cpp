@@ -722,7 +722,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 		//double c = grids.solveFEM();
 		double rel_res = 1;
 		int femit = 0;
-		while (rel_res > 1e-2 && femit++ < 50) {
+		while (rel_res > 1e-3 && femit++ < 50) {
 			rel_res = grids.v_cycle(1, 1);
 		}
 		double c = grids[0]->compliance();
@@ -736,8 +736,11 @@ void TestSuit::testOrdinarySplineTopopt(void)
 		grids.log(itn);
 		// compute sensitivity
 		computeSensitivity();
-		// update density
+		//// update density
 		updateDensities(Vgoal);
+		// update coeff
+		//updateCoeff(Vgoal);
+		// MARK[TODO]: maybe need to update coeff2density
 	}
 
 	printf("\n=   finished   =\n");
