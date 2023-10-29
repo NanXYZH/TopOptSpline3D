@@ -9,7 +9,7 @@
 //#define GLM_FORCE_CUDA
 //// #define GLM_FORCE_PURE (not needed anymore with recent GLM versions)
 //#include <glm/glm.hpp>
-//#include "matlab_utils.h"
+#include "matlab_utils.h"
 
 #define DIRICHLET_DIAGONAL_WEIGHT 1e6f
 //#define DIRICHLET_DIAGONAL_WEIGHT 1
@@ -3186,7 +3186,6 @@ void Grid::ddensity2dcoeff(void)
 				}
 			}
 		}
-		//return;
 	};
 
 	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
@@ -3202,7 +3201,6 @@ void Grid::ddensity2dcoeff(void)
 	cudaMemcpy(coeffindexhost, coeffindex, sizeof(int)* n_gselements * order3, cudaMemcpyDeviceToHost);
 	cudaMemcpy(part2c_valuehost, part2c_value, sizeof(float)* n_gselements * order3, cudaMemcpyDeviceToHost);
 	cuda_error_check;
-
 	
 	int row_tmp, indexlist_tmp;
 	float value_tmp;
@@ -3230,11 +3228,11 @@ void Grid::ddensity2dcoeff(void)
 	cudaMemcpy(_gbuf.c_sens, c_sens, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
-//#ifdef ENABLE_MATLAB
+#ifdef ENABLE_MATLAB
 	gpu_manager_t::pass_buf_to_matlab("coeffindex", coeffindexhost, n_gselements* order3);
 	gpu_manager_t::pass_buf_to_matlab("part2c", part2c_valuehost, n_gselements* order3);
 	gpu_manager_t::pass_buf_to_matlab("csens1", c_sens, n_cijk());
-//#endif
+#endif
 	
 	cudaFree(de2dc);
 	cudaFree(coeffindex);

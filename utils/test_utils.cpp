@@ -686,7 +686,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 
 #if 1
 	// MARK: ADD user-defined input	
-	initCoeffs(params.volume_ratio);		
+	initCoeffs(1);		
 	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
 	grids[0]->set_spline_knot_info();
