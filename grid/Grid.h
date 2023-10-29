@@ -181,6 +181,14 @@ namespace grid {
 		static void setOutDir(const std::string& outdir);
 		static const std::string& getOutDir(void);
 		static void* getTempBuf(size_t requre);
+		static void* getTempBuf1(size_t requre);
+		static void* getTempBuf2(size_t requre);
+
+
+		static void* _tmp_buf1;
+		static size_t _tmp_buf1_size;
+		static void* _tmp_buf2;
+		static size_t _tmp_buf2_size;
 
 		static int n_order;       // The order of implicit spline
 		static size_t n_partitionx;  // The number of partition of X,Y,Z direction
@@ -211,6 +219,8 @@ namespace grid {
 			}
 		}
 		static void clearBuf(void);
+		static void clearBuf1(void);
+		static void clearBuf2(void);
 
 	public:
 		friend class HierarchyGrid;
@@ -512,6 +522,8 @@ namespace grid {
 
 		void ddensity2dcoeff(void);
 
+		
+
 		double unitizeForce(void);
 
 		void pertubDisplacement(double ratio);
@@ -667,6 +679,8 @@ namespace grid {
 
 		// about spline
 		void coeff2density(void);
+
+		void lambdatest(void);
 
 		// log file
 		void log(int itn);

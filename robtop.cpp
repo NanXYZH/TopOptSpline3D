@@ -35,6 +35,7 @@ int main(int argc, char** argv)
 
 	setBoundaryCondition(parser.inFixArea, parser.inLoadArea, parser.loadField);
 
+	
 	buildGrids(parser.mesh_vertices, parser.mesh_faces);
 
 	uploadTemplateMatrix();

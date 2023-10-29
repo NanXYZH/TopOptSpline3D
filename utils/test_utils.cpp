@@ -664,6 +664,8 @@ void TestSuit::testOrdinaryTopopt(void)
 
 void TestSuit::testOrdinarySplineTopopt(void)
 {
+	//grids.lambdatest();
+
 	// set force
 	grids[0]->reset_force();
 	setForceSupport(getPreloadForce(), grids[0]->getForce());

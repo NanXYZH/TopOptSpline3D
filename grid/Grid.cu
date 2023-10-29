@@ -1079,10 +1079,61 @@ void* Grid::getTempBuf(size_t requre)
 	return _tmp_buf;
 }
 
-
 void Grid::clearBuf(void)
 {
-	cudaFree(_tmp_buf);
+	if (_tmp_buf != nullptr)
+	{
+		cudaFree(_tmp_buf);
+		cuda_error_check;
+	}
+}
+
+void* Grid::getTempBuf1(size_t requre)
+{
+	size_t req_size = snippet::Round<512>(requre);
+	if (_tmp_buf1 == nullptr) {
+		cudaMalloc(&_tmp_buf1, req_size);
+		_tmp_buf1_size = req_size;
+	}
+	if (_tmp_buf1_size < req_size) {
+		cudaFree(_tmp_buf1);
+		_tmp_buf1_size = snippet::Round<512>(req_size);
+		cudaMalloc(&_tmp_buf1, req_size);
+	}
+	return _tmp_buf1;
+}
+
+void Grid::clearBuf1(void)
+{
+	if (_tmp_buf1 != nullptr)
+	{
+		cudaFree(_tmp_buf1);
+		cuda_error_check;
+	}
+}
+
+void* Grid::getTempBuf2(size_t requre)
+{
+	size_t req_size = snippet::Round<512>(requre);
+	if (_tmp_buf2 == nullptr) {
+		cudaMalloc(&_tmp_buf2, req_size);
+		_tmp_buf2_size = req_size;
+	}
+	if (_tmp_buf2_size < req_size) {
+		cudaFree(_tmp_buf2);
+		_tmp_buf2_size = snippet::Round<512>(req_size);
+		cudaMalloc(&_tmp_buf2, req_size);
+	}
+	return _tmp_buf2;
+}
+
+void Grid::clearBuf2(void)
+{
+	if (_tmp_buf2 != nullptr)
+	{
+		cudaFree(_tmp_buf2);
+		cuda_error_check;
+	}
 }
 
 void Grid::lexico2gsorder_g(int* idmap, int n_id, int* ids, int n_mapid, int* mapped_ids, int* valuemap /*= nullptr*/)
@@ -2910,7 +2961,7 @@ void Grid::set_spline_knot_info(void)
 	{
 		delete[] KnotSerhost[i];
 	}
-	delete[] KnotSerhost;
+//	delete[] KnotSerhost;
 #endif
 }
 
@@ -3012,8 +3063,8 @@ void Grid::coeff2density(void)
 	cuda_error_check;
 }
 
-template<typename Partical2Coeff>
-__global__ void ddensity2dcoeff_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, const float* g_sens, float* c_gens, Partical2Coeff calc_node, const int* eidmap) {
+template<typename Func>
+__global__ void ddensity2dcoeff_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, Func func, const int* eidmap) {
 	int tid = threadIdx.x + blockIdx.x * blockDim.x;
 	if (tid >= nebitword) return;
 
@@ -3031,9 +3082,8 @@ __global__ void ddensity2dcoeff_kernel(int nebitword, gBitSAT<unsigned int> esat
 			int bid = tid * BitCount<unsigned int>::value + j;
 			int bpos[3] = { bid % ereso, bid % (ereso * ereso) / ereso, bid / (ereso * ereso) };
 			int eid = eidoffset + ewordoffset;
-			// MARK: to update
 			if (eidmap != nullptr) eid = eidmap[eid];
-			calc_node(bid, eid);
+			func(bid, eid);
 			
 			//g_sens[eid] = node_value;
 			ewordoffset++;
@@ -3049,17 +3099,30 @@ void Grid::ddensity2dcoeff(void)
 	float* de2dc;
 	cudaMalloc(&de2dc, sizeof(n_rho() * n_cijk()));
 
-	float* dc_tmp = (float*)getTempBuf(sizeof(float) * n_cijk());
-	init_array(dc_tmp, float{ 0 }, n_cijk());
+	//float* dc_tmp = (float*)getTempBuf(sizeof(float) * n_cijk());
+	//init_array(dc_tmp, float{ 0 }, n_cijk());
 	//cudaMemcpy(g_sens_copy, _gbuf.g_sens, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
 
 	int order3 = m_iM * m_iM * m_iM;
 
-	float* coeffindex = (float*)getTempBuf(sizeof(float) * n_gselements * order3);
-	init_array(coeffindex, float{ 0 }, n_gselements * order3);
+	int* coeffindex = (int*)getTempBuf1(sizeof(int) * n_gselements * order3);
+	init_array(coeffindex, int{ 0 }, n_gselements * order3);
 
-	float* part2c_value = (float*)getTempBuf(sizeof(float) * n_gselements * order3);
+	float* part2c_value = (float*)getTempBuf2(sizeof(float) * n_gselements * order3);
 	init_array(part2c_value, float{ 0 }, n_gselements * order3);
+
+	//int* test;
+	//cudaMalloc(&test, sizeof(int) * n_gselements * order3);
+	//init_array(test, 0, n_gselements * order3);
+
+	//int* coeffindex;
+	//cudaMalloc(&coeffindex, sizeof(int) * n_gselements * order3);
+	//init_array(coeffindex, std::numeric_limits<int>::quiet_NaN(), n_gselements * order3);
+
+	//float* part2c_value;
+	//cudaMalloc(&part2c_value, sizeof(float) * n_gselements * order3);
+	//init_array(part2c_value, float{ 0 }, n_gselements * order3);
+	//cuda_error_check;
 
 	float* cijk_value = _gbuf.coeffs;
 	float* knotx_ = _gbuf.KnotSer[0];
@@ -3067,6 +3130,7 @@ void Grid::ddensity2dcoeff(void)
 	float* knotz_ = _gbuf.KnotSer[2];
 	float* rholist = _gbuf.rho_e;
 	float* rho_diff = _gbuf.g_sens;
+	int* eidmap = _gbuf.eidmap;
 
 	int ereso = _ereso;
 	float eh = elementLength();
@@ -3074,8 +3138,8 @@ void Grid::ddensity2dcoeff(void)
 
 	size_t grid_size, block_size;
 	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
-
-	auto calc_node = [=] __device__(int id, int eid) {
+	
+	auto node_diff = [ = ] __device__(int id, int eid) {
 		int xCoordi = id % ereso;
 		int yCoordi = (id % (ereso * ereso)) / ereso;
 		int zCoordi = id / (ereso * ereso);
@@ -3117,32 +3181,28 @@ void Grid::ddensity2dcoeff(void)
 						coeffindex[order3 * eid + count4coeff] = index;
 						part2c_value[order3 * eid + count4coeff] = val;
 						count4coeff++;
-
 						//dc_tmp[index] = /* rho_diff[cur_element] */  pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 					}
 				}
 			}
 		}
-		return;
+		//return;
 	};
 
 	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
 
-	//float* g_sens_copy = (float*)getTempBuf(sizeof(float) * n_gselements);
-	//cudaMemcpy(g_sens_copy, _gbuf.g_sens, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
-
-	//init_array(_gbuf.rho_e, float{ 0 }, n_gselements);
-
-	ddensity2dcoeff_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, _gbuf.g_sens, _gbuf.c_sens, calc_node, _gbuf.eidmap);
+	ddensity2dcoeff_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, node_diff, _gbuf.eidmap);
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
 	// MARK: to sum
 	// Memcpy to cpu 
-	float* coeffindexhost = new float[n_gselements * order3];
+	int* coeffindexhost = new int[n_gselements * order3];
 	float* part2c_valuehost = new float[n_gselements * order3];
-	cudaMemcpy(coeffindexhost, coeffindex, sizeof(float)* n_gselements* order3, cudaMemcpyDeviceToHost);
-	cudaMemcpy(part2c_valuehost, part2c_value, sizeof(float)* n_gselements* order3, cudaMemcpyDeviceToHost);
+	cudaMemcpy(coeffindexhost, coeffindex, sizeof(int)* n_gselements * order3, cudaMemcpyDeviceToHost);
+	cudaMemcpy(part2c_valuehost, part2c_value, sizeof(float)* n_gselements * order3, cudaMemcpyDeviceToHost);
+	cuda_error_check;
+
 	
 	int row_tmp, indexlist_tmp;
 	float value_tmp;
@@ -3168,12 +3228,151 @@ void Grid::ddensity2dcoeff(void)
 
 	// upload to _gbuf.c_sens
 	cudaMemcpy(_gbuf.c_sens, c_sens, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	cuda_error_check;
+
+//#ifdef ENABLE_MATLAB
+	gpu_manager_t::pass_buf_to_matlab("coeffindex", coeffindexhost, n_gselements* order3);
+	gpu_manager_t::pass_buf_to_matlab("part2c", part2c_valuehost, n_gselements* order3);
+	gpu_manager_t::pass_buf_to_matlab("csens1", c_sens, n_cijk());
+//#endif
 	
-	cudaFree(dc_tmp);
+	cudaFree(de2dc);
 	cudaFree(coeffindex);
 	cudaFree(part2c_value);
+	clearBuf();
+	clearBuf1();
+	clearBuf2();
 	delete[] coeffindexhost;
 	delete[] part2c_valuehost;
+
+	// Mark : free c_sens
+}
+
+
+template <class T>
+struct CudaAllocator {
+	using value_type = T;
+
+	CudaAllocator() noexcept = default;
+
+	template <class U>
+	CudaAllocator(const CudaAllocator<U>&) noexcept {}
+
+	T* allocate(std::size_t n) {
+		T* ptr = nullptr;
+		cudaMallocManaged(&ptr, n * sizeof(T));
+		return ptr;
+	}
+
+	void deallocate(T* ptr, std::size_t) noexcept {
+		cudaFree(ptr);
+	}
+};
+
+
+template <class Func>
+__global__ void parallel_for(int n, Func func) {
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	int stride = gridDim.x * blockDim.x;
+	for (int i = idx; i < n; i += stride) {
+		func(i);
+	}
+}
+
+__global__ void sinfa(float* a, int n) {
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+	int stride = gridDim.x * blockDim.x;
+	for (int i = idx; i < n; i += stride) {
+		a[i] = sinf(i);
+	}
+}
+
+void HierarchyGrid::lambdatest(void)
+{
+	int n = 10;
+	//std::vector<float, CudaAllocator<float>> arr(n);
+	//std::vector<float, CudaAllocator<float>> brr(n);
+	std::vector<float> cpu(n);
+	int nByte = sizeof(float) * n;
+	float* a_h = (float*)malloc(nByte);
+	float* res_h = (float*)malloc(nByte);
+	float* a_d;
+	cudaMallocHost((float**)&a_d, nByte);
+	cudaMemcpy(a_d, a_h, nByte, cudaMemcpyHostToDevice);
+
+	float* crr;
+	cudaMalloc(&crr, sizeof(float) * n);
+	init_array(crr, std::numeric_limits<float>::quiet_NaN(), n);
+	float* drr;
+	cudaMalloc(&drr, sizeof(float) * n);
+	init_array(drr, std::numeric_limits<float>::quiet_NaN(), n);
+
+	// add1 need memcpy to device
+	const float constants[] = { 0.1f, 2.0f, 3.0f, 4.0f, 5.0f };
+	float* add1 = new float[5]; 
+	for (int i = 0; i < 5; ++i) {
+		add1[i] = constants[i];
+	}
+
+	float add11 = 0.1f;
+	
+	auto calc_node = [ = ] __device__(int i) {
+		//arr[i] = sinf(i);
+		//brr[i] = cosf(i);
+		crr[i] = sinf(i) + add11;
+		drr[i] = sinf(i);
+
+	};
+	parallel_for << <32, 128 >> > (n, calc_node);
+
+	//parallel_for << <32, 128 >> > (n, [arr = arr.data(), brr = brr.data()] __device__(int i) {
+	//	arr[i] = sinf(i);
+	//	brr[i] = cosf(i);
+	//	//crr[i] = sinf(i);
+	//});
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	std::cout << "cudalloc time " << std::endl;
+	
+	//float* arr_data = new float[nByte];
+	//float* brr_data = new float[nByte];
+	float* crr_data = new float[nByte];
+	float* drr_data = new float[nByte];
+	//cudaMemcpy(arr_data, arr.data(), nByte, cudaMemcpyDeviceToHost);
+	//cudaMemcpy(brr_data, brr.data(), nByte, cudaMemcpyDeviceToHost);
+	cudaMemcpy(crr_data, crr, nByte, cudaMemcpyDeviceToHost);
+	cudaMemcpy(drr_data, drr, nByte, cudaMemcpyDeviceToHost);
+	//gpu_manager_t::pass_buf_to_matlab("arr", arr_data, n);
+	//gpu_manager_t::pass_buf_to_matlab("brr", brr_data, n);
+	gpu_manager_t::pass_buf_to_matlab("crr", crr_data, n);
+	gpu_manager_t::pass_buf_to_matlab("drr", drr_data, n);
+	for (int i = 0; i < 10; ++i)
+	{
+		//std::cout << arr_data[i] << " , " << brr_data[i] << std::endl;
+		std::cout << crr_data[i] << " , " << drr_data[i] << std::endl;
+	}
+
+
+	sinfa << <32, 128 >> > (a_d, n);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	std::cout << "cpu time " << std::endl;
+	cudaMemcpy(res_h, a_d, nByte, cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	cudaFreeHost(a_d);
+	cuda_error_check;
+	cudaFree(crr);
+	cuda_error_check;
+	cudaFree(drr);
+	cuda_error_check;
+	//cudaFree(a_h);
+	//cudaFree(res_h);
+	delete[] res_h;
+	delete[] a_h;
+	//delete[] arr_data;
+	//delete[] brr_data;
+	delete[] crr_data;
+	delete[] drr_data;
 }
 
 
@@ -3303,6 +3502,8 @@ void Grid::filterSensitivity(double radii)
 	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, g_sens_copy, _gbuf.g_sens, radii, fr, _gbuf.eidmap);
 
 	cudaDeviceSynchronize();
+
+	clearBuf();
 
 	cuda_error_check;
 }

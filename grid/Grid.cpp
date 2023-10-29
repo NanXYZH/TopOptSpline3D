@@ -1574,6 +1574,10 @@ size_t grid::Grid::_tmp_buf_size = 0;
 
 grid::Mode grid::Grid::_mode;
 
+void* grid::Grid::_tmp_buf1 = nullptr;
+size_t grid::Grid::_tmp_buf1_size = 0;
+void* grid::Grid::_tmp_buf2 = nullptr;
+size_t grid::Grid::_tmp_buf2_size = 0;
 int grid::Grid::n_order = 0;       // The order of implicit spline
 size_t grid::Grid::n_partitionx = 0;  // The number of partition of X,Y,Z direction
 size_t grid::Grid::n_partitiony = 0;
