@@ -55,6 +55,34 @@ extern __constant__ double* gLoadnormal[3];
 
 extern gBitSAT<unsigned int> vid2loadid;
 
+__device__ float Heaviside(float s) {
+	float T = 0;
+	float eta = 0.15f;
+	float alpha = 0.001f;
+	if (s > (T + eta)) {
+		return 1;
+	}
+	else if (s < (T - eta)) {
+		return alpha;
+	}
+	else {
+		return 3 * (1 - alpha) / 4 * ((s - T) / eta - (s - T) * (s - T) * (s - T) / (eta * eta * eta * 3)) + (1 + alpha) / 2;
+	}
+}
+
+__device__ float Dirac(float s) {
+	float T = 0;
+	float eta = 0.15f;
+	float alpha = 0.001f;
+	if (s > (T + eta) || s < (T - eta)) {
+		return 0;
+	}
+	else {
+		return 3 * (1 - alpha) / (4 * eta) - 3 * (1 - alpha) * (s - T) * (s - T) / (4 * eta * eta * eta);
+	}
+}
+
+
 void Grid::use_grid(void)
 {
 	cudaMemcpyToSymbol(gV2V, _gbuf.v2v, sizeof(gV2V));
@@ -1069,12 +1097,15 @@ void* Grid::getTempBuf(size_t requre)
 	size_t req_size = snippet::Round<512>(requre);
 	if (_tmp_buf == nullptr) {
 		cudaMalloc(&_tmp_buf, req_size);
+		cuda_error_check;
 		_tmp_buf_size = req_size;
 	}
 	if (_tmp_buf_size < req_size) {
 		cudaFree(_tmp_buf);
+		cuda_error_check;
 		_tmp_buf_size = snippet::Round<512>(req_size);
 		cudaMalloc(&_tmp_buf, req_size);
+		cuda_error_check;
 	}
 	return _tmp_buf;
 }
@@ -1085,6 +1116,7 @@ void Grid::clearBuf(void)
 	{
 		cudaFree(_tmp_buf);
 		cuda_error_check;
+		_tmp_buf = nullptr;
 	}
 }
 
@@ -1109,6 +1141,7 @@ void Grid::clearBuf1(void)
 	{
 		cudaFree(_tmp_buf1);
 		cuda_error_check;
+		_tmp_buf1 = nullptr;
 	}
 }
 
@@ -1133,6 +1166,7 @@ void Grid::clearBuf2(void)
 	{
 		cudaFree(_tmp_buf2);
 		cuda_error_check;
+		_tmp_buf2 = nullptr;
 	}
 }
 
@@ -2947,7 +2981,7 @@ void Grid::set_spline_knot_info(void)
 	for (int i = 0; i < 3; i++)
 	{
 		int n_basis = spknotspan[i];
-		std::cout << n_basis << std::endl;
+		//std::cout << n_basis << std::endl;
 		KnotSerhost[i] = new float[n_basis];
 		cudaMemcpy(KnotSerhost[i], _gbuf.KnotSer[i], sizeof(float) * n_basis, cudaMemcpyDeviceToHost);
 		cuda_error_check;
@@ -3056,7 +3090,7 @@ void Grid::coeff2density(void)
 					for (it = k - gorder[0]; it < k; it++)
 					{
 						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
-						val += gpu_cijk[index] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+						val += cijk_value[index] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 					}
 				}
 			}
@@ -3064,7 +3098,8 @@ void Grid::coeff2density(void)
 		// MARK[TODO] : restrict the density bound
 		// rhoknew = clamp(rhoknew, rhomin, 1.f);
      	// if (gEflag[0][eid] & grid::Grid::Bitmask::mask_shellelement) rhonew = 1;
-		return val;
+		//return val;
+		return Heaviside(val);
 	};
 
 	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
@@ -3073,6 +3108,12 @@ void Grid::coeff2density(void)
 
 	coeff2density_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, min_Density, esat, _ereso, _gbuf.rho_e, calc_node, _gbuf.eidmap, _gbuf.eBitflag);
 	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	int coeffsize = n_cijk();
+	float* coeffhost = new float[n_cijk()];
+	gpu_manager_t::download_buf(coeffhost, _gbuf.coeffs, n_cijk());
+	gpu_manager_t::pass_buf_to_matlab("coeff1", coeffhost, n_cijk());
 	cuda_error_check;
 
 	float* rhohost = new float[n_gselements];
@@ -3111,38 +3152,28 @@ __global__ void ddensity2dcoeff_kernel(int nebitword, gBitSAT<unsigned int> esat
 	}
 }
 
-// MARK: to do
 void Grid::ddensity2dcoeff(void)
 {
 	if (_layer != 0) return;
-	// computation
-	float* de2dc;
-	cudaMalloc(&de2dc, sizeof(n_rho() * n_cijk()));
-
-	//float* dc_tmp = (float*)getTempBuf(sizeof(float) * n_cijk());
-	//init_array(dc_tmp, float{ 0 }, n_cijk());
-	//cudaMemcpy(g_sens_copy, _gbuf.g_sens, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
-
 	int order3 = m_iM * m_iM * m_iM;
 
-	int* coeffindex = (int*)getTempBuf1(sizeof(int) * n_gselements * order3);
-	init_array(coeffindex, int{ 0 }, n_gselements * order3);
+	//int* coeffindex = (int*)getTempBuf1(sizeof(int) * n_gselements * order3);
+	//init_array(coeffindex, int{ 0 }, n_gselements * order3);
+	//cuda_error_check;
 
-	float* part2c_value = (float*)getTempBuf2(sizeof(float) * n_gselements * order3);
-	init_array(part2c_value, float{ 0 }, n_gselements * order3);
-
-	//int* test;
-	//cudaMalloc(&test, sizeof(int) * n_gselements * order3);
-	//init_array(test, 0, n_gselements * order3);
-
-	//int* coeffindex;
-	//cudaMalloc(&coeffindex, sizeof(int) * n_gselements * order3);
-	//init_array(coeffindex, std::numeric_limits<int>::quiet_NaN(), n_gselements * order3);
-
-	//float* part2c_value;
-	//cudaMalloc(&part2c_value, sizeof(float) * n_gselements * order3);
+	//float* part2c_value = (float*)getTempBuf2(sizeof(float) * n_gselements * order3);
 	//init_array(part2c_value, float{ 0 }, n_gselements * order3);
 	//cuda_error_check;
+
+	int* coeffindex;
+	cudaMalloc(&coeffindex, sizeof(int) * n_gselements * order3);
+	init_array(coeffindex, std::numeric_limits<int>::quiet_NaN(), n_gselements * order3);
+	cuda_error_check;
+
+	float* part2c_value;
+	cudaMalloc(&part2c_value, sizeof(float) * n_gselements * order3);
+	init_array(part2c_value, float{ 0 }, n_gselements * order3);
+	cuda_error_check;
 
 	float* cijk_value = _gbuf.coeffs;
 	float* knotx_ = _gbuf.KnotSer[0];
@@ -3190,7 +3221,6 @@ void Grid::ddensity2dcoeff(void)
 
 			val = 0.0f;
 			int count4coeff = 0;
-			//index = i + j * m_im + k * m_im * m_in;
 			for (ir = i - gorder[0]; ir < i; ir++)
 			{
 				for (is = j - gorder[0]; is < j; is++)
@@ -3205,7 +3235,7 @@ void Grid::ddensity2dcoeff(void)
 						}
 						else
 						{
-							val = rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							val = Dirac(rholist[eid]) * rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 							part2c_value[order3 * eid + count4coeff] = val;
 
 						}
@@ -3223,7 +3253,6 @@ void Grid::ddensity2dcoeff(void)
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
-	// MARK: to sum
 	// Memcpy to cpu 
 	int* coeffindexhost = new int[n_gselements * order3];
 	float* part2c_valuehost = new float[n_gselements * order3];
@@ -3231,7 +3260,7 @@ void Grid::ddensity2dcoeff(void)
 	cudaMemcpy(part2c_valuehost, part2c_value, sizeof(float)* n_gselements * order3, cudaMemcpyDeviceToHost);
 	cuda_error_check;
 
-	int row_tmp, indexlist_tmp;
+	int col_tmp, indexlist_tmp;
 	float value_tmp;
 	float* c_sens = new float[n_cijk()];
 	std::fill(c_sens, c_sens + n_cijk(), 0.0f);
@@ -3241,38 +3270,148 @@ void Grid::ddensity2dcoeff(void)
 		for (int j = 0; j < order3; j++)
 		{
 			indexlist_tmp = i * order3 + j;
-			row_tmp = coeffindexhost[indexlist_tmp];
+			col_tmp = coeffindexhost[indexlist_tmp];
 			value_tmp = part2c_valuehost[indexlist_tmp];
 			
-			if (row_tmp >= n_cijk())
+			if (col_tmp >= n_cijk())
 			{
 				std::cout << "\033[31m Invalid cijk index !!! \033[0m" << std::endl;
 				break;
 			}
-			c_sens[row_tmp] += value_tmp;
+			c_sens[col_tmp] += value_tmp;
 		}
 	}
 
 	// upload to _gbuf.c_sens
+	init_array(_gbuf.c_sens, float{ 0 }, n_cijk());
 	cudaMemcpy(_gbuf.c_sens, c_sens, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	cuda_error_check;
+//
+//#ifdef ENABLE_MATLAB
+//	gpu_manager_t::pass_buf_to_matlab("coeffindex", coeffindexhost, n_gselements* order3);
+//	gpu_manager_t::pass_buf_to_matlab("part2c", part2c_valuehost, n_gselements* order3);
+//	gpu_manager_t::pass_buf_to_matlab("csens1", c_sens, n_cijk());
+//#endif
+	
+	cudaFree(coeffindex);
+	cudaFree(part2c_value);
+	coeffindex = nullptr;
+	part2c_value = nullptr;
+
+	//clearBuf1();
+	//clearBuf2();
+	delete[] coeffindexhost;
+	delete[] part2c_valuehost;
+	delete[] c_sens;
+	coeffindexhost = nullptr;
+	part2c_valuehost = nullptr;
+	c_sens = nullptr;
+}
+
+void Grid::ddensity2dcoeff_update(void)
+{
+	if (_layer != 0) return;
+	// computation
+	float* dc_tmp;
+	cudaMalloc(&dc_tmp, sizeof(float) * n_cijk());
+	init_array(dc_tmp, float{ 0 }, n_cijk());
+	cuda_error_check;
+
+	int order3 = m_iM * m_iM * m_iM;
+
+	float* cijk_value = _gbuf.coeffs;
+	float* knotx_ = _gbuf.KnotSer[0];
+	float* knoty_ = _gbuf.KnotSer[1];
+	float* knotz_ = _gbuf.KnotSer[2];
+	float* rholist = _gbuf.rho_e;
+	float* rho_diff = _gbuf.g_sens;
+	int* eidmap = _gbuf.eidmap;
+	int* eflag = _gbuf.eBitflag;
+
+	int ereso = _ereso;
+	float eh = elementLength();
+	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
+
+	auto node_diff = [=] __device__(int id, int eid) {
+		int xCoordi = id % ereso;
+		int yCoordi = (id % (ereso * ereso)) / ereso;
+		int zCoordi = id / (ereso * ereso);
+		float pos[3] = { boxOrigin[0] + xCoordi * eh + 0.5 * eh,boxOrigin[1] + yCoordi * eh + 0.5 * eh, boxOrigin[2] + zCoordi * eh + 0.5 * eh };
+
+		float val;
+		int i, j, k, ir, it, is, index;
+
+		float pNX[m_iM + 1];
+		float pNY[m_iM + 1];
+		float pNZ[m_iM + 1];
+
+		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
+		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
+		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
+		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
+
+		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
+		{
+			val = -0.2f;
+		}
+		else
+		{
+			SplineBasisX(pos[0], pNX);
+			SplineBasisY(pos[1], pNY);
+			SplineBasisZ(pos[2], pNZ);
+
+			val = 0.0f;
+			int count4coeff = 0;
+			//index = i + j * m_im + k * m_im * m_in;
+			for (ir = i - gorder[0]; ir < i; ir++)
+			{
+				for (is = j - gorder[0]; is < j; is++)
+				{
+					for (it = k - gorder[0]; it < k; it++)
+					{
+						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
+						if (eflag[eid] & grid::Grid::mask_shellelement)
+						{
+							dc_tmp[index] += 0;
+						}
+						else
+						{
+							val = rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							dc_tmp[index] += val;
+						}
+						count4coeff++;
+					}
+				}
+			}
+		}
+	};
+
+	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
+
+	ddensity2dcoeff_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, node_diff, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float* dc_host = new float[n_cijk()];
+	cudaMemcpy(dc_host, dc_tmp, sizeof(float)* n_cijk(), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	// upload to _gbuf.c_sens
+	init_array(_gbuf.c_sens, float{ 0 }, n_cijk());
+	cudaMemcpy(_gbuf.c_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
 #ifdef ENABLE_MATLAB
-	gpu_manager_t::pass_buf_to_matlab("coeffindex", coeffindexhost, n_gselements* order3);
-	gpu_manager_t::pass_buf_to_matlab("part2c", part2c_valuehost, n_gselements* order3);
-	gpu_manager_t::pass_buf_to_matlab("csens1", c_sens, n_cijk());
+	gpu_manager_t::pass_buf_to_matlab("csens2", dc_host, n_cijk());
 #endif
-	
-	cudaFree(de2dc);
-	cudaFree(coeffindex);
-	cudaFree(part2c_value);
-	//clearBuf();
-	delete[] coeffindexhost;
-	delete[] part2c_valuehost;
 
-	// Mark : free c_sens
+	cudaFree(dc_tmp);
+	dc_tmp = nullptr;
+	delete[] dc_host;
+	dc_host = nullptr;
 }
-
 
 template <class T>
 struct CudaAllocator {
@@ -3293,7 +3432,6 @@ struct CudaAllocator {
 		cudaFree(ptr);
 	}
 };
-
 
 template <class Func>
 __global__ void parallel_for(int n, Func func) {

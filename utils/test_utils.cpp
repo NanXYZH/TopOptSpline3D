@@ -737,9 +737,9 @@ void TestSuit::testOrdinarySplineTopopt(void)
 		// compute sensitivity
 		computeSensitivity();
 		//// update density
-		updateDensities(Vgoal);
+		//updateDensities(Vgoal);
 		// update coeff
-		//updateCoeff(Vgoal);
+		updateCoeff(Vgoal);
 		// MARK[TODO]: maybe need to update coeff2density
 	}
 

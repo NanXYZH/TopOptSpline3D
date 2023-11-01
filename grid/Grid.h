@@ -529,7 +529,7 @@ namespace grid {
 
 		void ddensity2dcoeff(void);
 
-		
+		void ddensity2dcoeff_update(void);
 
 		double unitizeForce(void);
 

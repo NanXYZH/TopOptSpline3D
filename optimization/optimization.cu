@@ -48,7 +48,7 @@ extern __device__ void loadTemplateMatrix(volatile double KE[24][24]);
 
 template<int N>
 __device__ int gridPos2id(int x, int y, int z) {
-	return x + y * N + z * N*N;
+	return x + y * N + z * N * N;
 }
 
 //  suppose Uworst, Fworst is prepared in U, F
@@ -125,6 +125,7 @@ void computeSensitivity(void) {
 
 	// init sensitivity to zero
 	init_array(grids[0]->getSens(), float{ 0 }, grids[0]->n_rho());
+	cuda_error_check;
 
 	size_t grid_size, block_size;
 	make_kernel_param(&grid_size, &block_size, grids[0]->n_nodes(), 512);
@@ -142,11 +143,28 @@ void computeSensitivity(void) {
 	// DEBUG
 	grids[0]->sens2matlab("sensfilt");
 
+	size_t free_mem, total_mem;
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
+
+	//// rho_diff 2 coeff_diff
+	//grids[0]->ddensity2dcoeff();
+
+	//cudaMemGetInfo(&free_mem, &total_mem);
+	//std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
+
+	//// DEBUG
+	//grids[0]->csens2matlab("csensfilt1");
+
 	// rho_diff 2 coeff_diff
-	grids[0]->ddensity2dcoeff();
+	grids[0]->ddensity2dcoeff_update();
+
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
 
 	// DEBUG
-	grids[0]->csens2matlab("csensfilt");
+	grids[0]->csens2matlab("csensfilt2");
+
 }
 
 
@@ -291,22 +309,14 @@ float updateCoeff(float Vgoal) {
 
 	// compute old volume ratio
 	double* sum = (double*)grid::Grid::getTempBuf(sizeof(double) * grids[0]->n_rho() / 100);
-	cuda_error_check;
 	double Vold = parallel_sum_d(grids[0]->getRho(), sum, grids[0]->n_rho()) / grids[0]->n_rho();
-	cuda_error_check;
 
 	std::cout << " test vold : " << Vold << std::endl;
-	grid::Grid::clearBuf();
-	cuda_error_check;
 
 	// compute maximal sensitivity
 	float* maxdump = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_cijk() / 100);
-	cuda_error_check;
 	float g_max = parallel_maxabs(grids[0]->getCSens(), maxdump, grids[0]->n_cijk());
 	std::cout << " test g_max : " << g_max << std::endl;
-	cuda_error_check;
-	grid::Grid::clearBuf();
-	cuda_error_check;
 
 	g_thres_upp = g_max;
 
@@ -317,6 +327,15 @@ float updateCoeff(float Vgoal) {
 	// iteration counter
 	int itn = 0;
 
+	// MARK[TODO] newcijk need to update to _gbuf.coeffs !!!
+	float* coeff_copy = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_cijk());
+	cudaMemcpy(coeff_copy, grids[0]->_gbuf.coeffs, sizeof(float) * grids[0]->n_cijk(), cudaMemcpyDeviceToDevice);
+	init_array(grids[0]->_gbuf.coeffs, float{ 0 }, grids[0]->n_cijk());
+
+	size_t free_mem, total_mem;
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
+
 	// bisection search sensitivity multiplier
 	do {
 		// update sensitivity threshold
@@ -324,22 +343,28 @@ float updateCoeff(float Vgoal) {
 
 		printf("-- searching multiplier g = %4.4e", g_thres);
 
-		float* newcijk = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_cijk());
+		//// MARK[TODO] newcijk need to update to _gbuf.coeffs !!!
+		//float* coeff_copy = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_cijk());
+		//cudaMemcpy(coeff_copy, grids[0]->_gbuf.coeffs, sizeof(float) * grids[0]->n_cijk(), cudaMemcpyDeviceToDevice);
+		//init_array(grids[0]->_gbuf.coeffs, float{ 0 }, grids[0]->n_cijk());
 
-		// update new rho
-		// MARK[TODO] change to rho
+		// update new coeff
 		tryCSensMultiplier_kernel << <grid_size, block_size >> > (
-			grids[0]->n_cijk(), grids[0]->getCoeff(), grids[0]->getCSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, newcijk);
+			grids[0]->n_cijk(), coeff_copy, grids[0]->getCSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, grids[0]->getCoeff());
 		cudaDeviceSynchronize();
 		cuda_error_check;
 
+		//float* newrho = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_rho());
+
 		//// update new rho
-		//tryCSensMultiplier_kernel << <grid_size, block_size >> > (
-		//	grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.max_cijk, params.max_cijk, newcijk);
+		//trySensMultiplier_kernel << <grid_size, block_size >> > (
+		//	grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_rho, newrho);
 		//cudaDeviceSynchronize();
 		//cuda_error_check;
 
-		// MARK[TODO] add coeff 2 rho
+		// MARK[TODO] newcijk need to update to _gbuf.coeffs !!!
+		
+		// coeff 2 rho
 		grids[0]->coeff2density();
 		float* newrho = grids[0]->getRho();
 
@@ -361,10 +386,18 @@ float updateCoeff(float Vgoal) {
 		grids[0]->n_cijk(), grids[0]->getCoeff(), grids[0]->getCSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, grids[0]->getCoeff());
 	cudaDeviceSynchronize();
 	cuda_error_check;
+
 	grids[0]->coeff2density();
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
+
+	grid::Grid::clearBuf();
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
 
 	//// update densities according to new sensitivity
-	//tryCSensMultiplier_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, grids[0]->getRho());
+	//tryCSensMultiplier_kernel << <grid_size, block_size >> > (
+	// grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_cijk, params.max_cijk, grids[0]->getRho());
 	//cudaDeviceSynchronize();
 	//cuda_error_check;
 
