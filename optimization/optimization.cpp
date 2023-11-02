@@ -726,7 +726,7 @@ void initDensities(double rho)
 
 void initCoeffs(double coeff)
 {
-#if 0
+#if 1
 	grids[0]->init_coeff(coeff);
 #else
 	float* coeff_noise = new float[grids[0]->n_cijk()];

@@ -32,7 +32,11 @@ public:
 
 	static void testOrdinaryTopopt(void);
 
+	static void testOrdinaryTopoptMMA(void);
+
 	static void testOrdinarySplineTopopt(void);
+
+	static void testOrdinarySplineTopoptMMA(void);
 
 	static void testDifferentEigenSolvers(void);
 
@@ -73,6 +77,8 @@ public:
 	static void testKernels(void);
 
 	static void setDensity(float* newrho);
+
+	static void setCoeff(float* newcijk);
 
 	static void scaleVector(float* p_data, size_t len, float scale);
 

@@ -56,8 +56,11 @@ extern __constant__ double* gLoadnormal[3];
 extern gBitSAT<unsigned int> vid2loadid;
 
 __device__ float Heaviside(float s) {
-	float T = 0;
-	float eta = 0.15f;
+#if 0
+	return s;
+#else
+	float T = 0.5f;
+	float eta = 0.1f;
 	float alpha = 0.001f;
 	if (s > (T + eta)) {
 		return 1;
@@ -68,11 +71,15 @@ __device__ float Heaviside(float s) {
 	else {
 		return 3 * (1 - alpha) / 4 * ((s - T) / eta - (s - T) * (s - T) * (s - T) / (eta * eta * eta * 3)) + (1 + alpha) / 2;
 	}
+#endif
 }
 
 __device__ float Dirac(float s) {
-	float T = 0;
-	float eta = 0.15f;
+#if 0
+	return 1;
+#else
+	float T = 0.5f;
+	float eta = 0.1f;
 	float alpha = 0.001f;
 	if (s > (T + eta) || s < (T - eta)) {
 		return 0;
@@ -80,8 +87,8 @@ __device__ float Dirac(float s) {
 	else {
 		return 3 * (1 - alpha) / (4 * eta) - 3 * (1 - alpha) * (s - T) * (s - T) / (4 * eta * eta * eta);
 	}
+#endif
 }
-
 
 void Grid::use_grid(void)
 {
@@ -3379,7 +3386,7 @@ void Grid::ddensity2dcoeff_update(void)
 						}
 						else
 						{
-							val = rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							val = Dirac(rholist[eid]) * rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 							dc_tmp[index] += val;
 						}
 						count4coeff++;

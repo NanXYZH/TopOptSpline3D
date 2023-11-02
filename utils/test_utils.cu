@@ -42,6 +42,12 @@ void TestSuit::setDensity(float* newrho)
 	cuda_error_check;
 }
 
+void TestSuit::setCoeff(float* newcijk)
+{
+	cudaMemcpy(grids[0]->getCoeff(), newcijk, sizeof(float) * grids[0]->n_cijk(), cudaMemcpyDeviceToDevice);
+	cuda_error_check;
+}
+
 void TestSuit::scaleVector(float* p_data, size_t len, float scale)
 {
 	array_t<float> vec_map(p_data, len);

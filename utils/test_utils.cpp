@@ -299,8 +299,14 @@ void TestSuit::testMain(const std::string& testname)
 	else if (testname == "testordtop") {
 		testOrdinaryTopopt();
 	}
+	else if (testname == "testordtopmma") {
+		testOrdinaryTopoptMMA();
+	}
 	else if (testname == "testordsplinetop") {
 		testOrdinarySplineTopopt();
+	}
+	else if (testname == "testordsplinetopmma") {
+		testOrdinarySplineTopoptMMA();
 	}
 	else if (testname == "testdistributeforce") {
 		testDistributeForceOpt();
@@ -591,7 +597,6 @@ void TestSuit::testAccuratePMTotalTime(void)
 
 void TestSuit::testOrdinaryTopopt(void)
 {
-
 	// set force
 	grids[0]->reset_force();
 	setForceSupport(getPreloadForce(), grids[0]->getForce());
@@ -662,6 +667,104 @@ void TestSuit::testOrdinaryTopopt(void)
 	bio::write_vector(grids.getPath("vrec"), volRecord);
 }
 
+void TestSuit::testOrdinaryTopoptMMA(void)
+{
+	// set force
+	grids[0]->reset_force();
+	setForceSupport(getPreloadForce(), grids[0]->getForce());
+
+	if (!grids.hasSupport()) {
+		forceProject(grids[0]->getForce());
+	}
+
+	grids[0]->force2matlab("fn");
+
+	grids.resetAllResidual();
+	grids[0]->reset_displacement();
+	grids.writeSupportForce(grids.getPath("fs"));
+
+#if 1
+	initDensities(params.volume_ratio);
+	float Vgoal = params.volume_ratio;
+#else
+	initDensities(1);
+	float Vgoal = 1;
+#endif
+
+	int itn = 0;
+
+	snippet::converge_criteria stop_check(1, 5, 1e-3);
+
+	std::vector<double> cRecord, volRecord;
+
+	double Vc = Vgoal - params.volume_ratio;
+
+	//  
+	MMA::mma_t mma(grids[0]->n_gselements, 1);
+	mma.init(params.min_rho, 1);
+	float volScale = 1e3;
+	float sensScale = 1e5;
+	gv::gVector dv(grids[0]->n_gselements, volScale / grids[0]->n_gselements);
+	gv::gVector v(1, volScale * (1 - params.volume_ratio));
+
+	while (itn++ < 100) {
+		printf("\n* \033[32mITER %d \033[0m*\n", itn);
+		Vgoal *= (1 - params.volume_decrease);
+		Vc = Vgoal - params.volume_ratio;
+		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
+
+		// update density from mma
+		setDensity(mma.get_x().data());
+		gpu_manager_t::pass_dev_buf_to_matlab("rho", grids[0]->getRho(), grids[0]->n_rho());
+
+		// compute volume
+		double vol = grids[0]->volumeRatio();
+		v[0] = volScale * (vol - params.volume_ratio);
+
+		// update numeric stencil after density changed
+		update_stencil();
+		// solve displacement 
+		//double c = grids.solveFEM();
+		double rel_res = 1;
+		int femit = 0;
+		while (rel_res > 1e-2 && femit++ < 50) {
+			rel_res = grids.v_cycle(1, 1);
+		}
+		double c = grids[0]->compliance();
+		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
+		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
+		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
+		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
+		grids.log(itn);
+		// compute sensitivity
+		computeSensitivity();
+		// update density
+		scaleVector(grids[0]->getSens(), grids[0]->n_gselements, sensScale);
+
+		gpu_manager_t::pass_dev_buf_to_matlab("sens", grids[0]->getSens(), grids[0]->n_gselements);
+
+		mma.update(grids[0]->getSens(), &dv.data(), v.data());
+
+		// DEBUG
+		if (itn % 5 == 0) {
+			grids.writeDensity(grids.getPath("out.vdb"));
+			grids.writeSensitivity(grids.getPath("sens.vdb"));
+		}
+	}
+
+	printf("\n=   finished   =\n");
+
+	// write result density field
+	grids.writeDensity(grids.getPath("out.vdb"));
+
+	// write worst compliance record during optimization
+	bio::write_vector(grids.getPath("c"), cRecord);
+
+	// write volume record during optimization
+	bio::write_vector(grids.getPath("vrec"), volRecord);
+}
+
+
 void TestSuit::testOrdinarySplineTopopt(void)
 {
 	//grids.lambdatest();
@@ -686,7 +789,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 
 #if 1
 	// MARK: ADD user-defined input	
-	initCoeffs(1);		
+	initCoeffs(params.volume_ratio);		
 	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
 	grids[0]->set_spline_knot_info();
@@ -703,7 +806,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 
-	snippet::converge_criteria stop_check(1, 5, 1e-3);
+	snippet::converge_criteria stop_check(1, 10, 1e-4);
 
 	std::vector<double> cRecord, volRecord;
 
@@ -739,8 +842,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 		//// update density
 		//updateDensities(Vgoal);
 		// update coeff
-		updateCoeff(Vgoal);
-		// MARK[TODO]: maybe need to update coeff2density
+		updateCoeff(Vgoal);                    // realization of OC
 	}
 
 	printf("\n=   finished   =\n");
@@ -754,6 +856,125 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	// write volume record during optimization
 	bio::write_vector(grids.getPath("vrec"), volRecord);
 }
+
+void TestSuit::testOrdinarySplineTopoptMMA(void)
+{
+	//grids.lambdatest();
+
+	// set force
+	grids[0]->reset_force();
+	setForceSupport(getPreloadForce(), grids[0]->getForce());
+
+	if (!grids.hasSupport()) {
+		forceProject(grids[0]->getForce());
+	}
+
+	grids[0]->force2matlab("fn");
+
+	grids.resetAllResidual();
+	grids[0]->reset_displacement();
+	grids.writeSupportForce(grids.getPath("fs"));
+
+	grids.testShell();
+	grids.writeNodePos(grids.getPath("nodepos"), *grids[0]);
+	grids.writeElementPos(grids.getPath("elepos"), *grids[0]);
+
+#if 1
+	// MARK: ADD user-defined input	
+	initCoeffs(params.volume_ratio);
+	grids[0]->set_spline_knot_series();
+	grids.writeCoeff(grids.getPath("coeff"));
+	grids[0]->set_spline_knot_info();
+	grids[0]->coeff2density();
+	float Vgoal = params.volume_ratio;
+#elif 0	
+	initDensities(params.volume_ratio);
+	float Vgoal = params.volume_ratio;
+#else
+	initDensities(1);
+	float Vgoal = 1;
+#endif
+
+	grids.writeDensityac(grids.getPath("density_test.vdb"));
+	int itn = 0;
+
+	snippet::converge_criteria stop_check(1, 10, 1e-4);
+
+	std::vector<double> cRecord, volRecord;
+
+	double Vc = Vgoal - params.volume_ratio;
+
+	std::vector<float> tmodipm;
+
+	// MMA
+	MMA::mma_t mma(grids[0]->n_cijk(), 1);
+	mma.init(params.min_cijk, 1);
+	float volScale = 1e3;
+	float sensScale = 1e5;
+	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
+	gv::gVector v(1, volScale * (1 - params.volume_ratio));
+
+	while (itn++ < 100) {
+		printf("\n* \033[32mITER %d \033[0m*\n", itn);
+		Vgoal *= (1 - params.volume_decrease);
+		Vc = Vgoal - params.volume_ratio;
+		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
+
+		// set spline_coeff from mma
+		setCoeff(mma.get_x().data());
+
+		// update coeff 2 density
+		grids[0]->coeff2density();
+
+		// compute volume 
+		// MARK[TODO] : how to add changing volume ratio in MMA
+		double vol = grids[0]->volumeRatio();
+		v[0] = volScale * (vol - params.volume_ratio);
+
+		// update numeric stencil after density changed
+		update_stencil();
+		// solve displacement 
+		//double c = grids.solveFEM();
+		double rel_res = 1;
+		int femit = 0;
+		while (rel_res > 1e-3 && femit++ < 50) {
+			rel_res = grids.v_cycle(1, 1);
+		}
+		double c = grids[0]->compliance();
+
+		grids.writeDisplacement(grids.getPath("ulast"));
+
+		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
+		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
+		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
+		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
+		grids.log(itn);
+		// compute sensitivity
+		computeSensitivity();
+
+		scaleVector(grids[0]->getCSens(), grids[0]->n_cijk(), sensScale);
+
+		gpu_manager_t::pass_dev_buf_to_matlab("csens", grids[0]->getCSens(), grids[0]->n_cijk());
+
+		// MARK[TODO] dv not updated !!
+		mma.update(grids[0]->getCSens(), &dv.data(), v.data());
+
+		//// update coeff
+		//updateCoeff(Vgoal);
+	}
+
+	printf("\n=   finished   =\n");
+
+	// write result density field
+	grids.writeDensity(grids.getPath("out.vdb"));
+
+	// write worst compliance record during optimization
+	bio::write_vector(grids.getPath("c"), cRecord);
+
+	// write volume record during optimization
+	bio::write_vector(grids.getPath("vrec"), volRecord);
+}
+
 
 
 std::pair<double, Eigen::VectorXd> SpectraFindLargestEigenPair(const Eigen::MatrixXd& mat) {
