@@ -315,12 +315,12 @@ gv::gVector MMA::mma_subproblem_t::solveLinearSystem(
 	
 	dx.toMatlab("dx");
 	dy.toMatlab("dy");
-	std::cout << "dz = " << dz << std::endl;
+	//std::cout << "dz = " << dz << std::endl;
 	dlambda.toMatlab("dlambda");
 	dxi.toMatlab("dxi");
 	deta.toMatlab("deta");
 	dmu.toMatlab("dmu");
-	std::cout << "dzeta = " << dzeta << std::endl;
+	//std::cout << "dzeta = " << dzeta << std::endl;
 	ds.toMatlab("ds");
 
 
@@ -412,7 +412,7 @@ std::pair<gv::Scalar, gv::Scalar> MMA::mma_subproblem_t::solve(gv::gVector* df, 
 			Scalar max_t1inv = ((-1 / asym_clamp_factor) * (get_dx(dw) / (mma.x - mma.alpha))).max();
 			Scalar max_t2inv = ((1 / asym_clamp_factor) * (get_dx(dw) / (mma.beta - mma.x))).max();
 			Scalar max_t3inv = ((-1 / asym_clamp_factor)*get_artivar(dw) / get_artivar(w)).max();
-			printf("max_tinv = (%f, %f, %f)\n", max_t1inv, max_t2inv, max_t3inv);
+			//printf("max_tinv = (%f, %f, %f)\n", max_t1inv, max_t2inv, max_t3inv);
 			Scalar max_t = 1 / (std::max)((std::max)(max_t1inv, max_t2inv), (std::max)(max_t3inv, Scalar{ 1 }));
 
 #ifdef __MMA_WITH_MATLAB
@@ -420,16 +420,16 @@ std::pair<gv::Scalar, gv::Scalar> MMA::mma_subproblem_t::solve(gv::gVector* df, 
 			//((mma.beta - mma.x) / get_dx(dw)).toMatlab("t2b");
 #endif
 
-			printf("\033[32msearching step ... initial step = %f,\033[0m\033[34m epsilon = %f\033[0m\n", max_t, mma.epsilon);
-			std::cout << "==========================================================================================" << std::endl;
+			//printf("\033[32msearching step ... initial step = %f,\033[0m\033[34m epsilon = %f\033[0m\n", max_t, mma.epsilon);
+			//std::cout << "==========================================================================================" << std::endl;
 
-			std::cout << "\033[31mrelambda damping " << lambda_damp << "\033[0m" << std::endl;
+			//std::cout << "\033[31mrelambda damping " << lambda_damp << "\033[0m" << std::endl;
 
 			err_step = search_step(dw, max_t, lambda_damp);
 
 			err = err_step.first;
 
-			std::cout << "\033[31merr = " << err << "\033[0m" << ", lasterr = " << lasterr << std::endl;
+			//std::cout << "\033[31merr = " << err << "\033[0m" << ", lasterr = " << lasterr << std::endl;
 
 			if ((err - lasterr) / err < 1e-5) {
 				err_stays_counter++;
@@ -450,7 +450,7 @@ std::pair<gv::Scalar, gv::Scalar> MMA::mma_subproblem_t::solve(gv::gVector* df, 
 				err_stays = false;
 			}
 
-			printf("\033[32musing step = %f\033[0m", err_step.second, mma.epsilon);
+			//printf("\033[32musing step = %f\033[0m", err_step.second, mma.epsilon);
 
 			if (nSubIter++ > 80) {
 				printf("\033[31mIteration on subproblem is overflowed !\n\033[0m");
@@ -500,7 +500,7 @@ std::pair<gv::Scalar, gv::Scalar> MMA::mma_subproblem_t::solve(gv::gVector* df, 
 
 std::pair<Scalar, Scalar> MMA::mma_subproblem_t::search_step(gv::gVector& dw, Scalar initial_step, Scalar lambda_damp)
 {
-	std::cout << "backtracking line searching..." << std::endl;
+	//std::cout << "backtracking line searching..." << std::endl;
 	dx = get_dx(dw);
 	dy = get_dy(dw);
 	dz = get_dz(dw);
@@ -528,7 +528,7 @@ std::pair<Scalar, Scalar> MMA::mma_subproblem_t::search_step(gv::gVector& dw, Sc
 
 	auto two_inf_err = kkt_err(mma.x, mma.y, mma.z, mma.lambda, mma.xi, mma.eta, mma.mu, mma.zeta, mma.s);
 
-	std::cout << "old : ||delta||_2 = " << two_inf_err.first << ", " << "||delta||_inf = " << two_inf_err.second << std::endl;
+	//std::cout << "old : ||delta||_2 = " << two_inf_err.first << ", " << "||delta||_inf = " << two_inf_err.second << std::endl;
 
 	Scalar old_err = two_inf_err.first;
 
@@ -536,8 +536,8 @@ std::pair<Scalar, Scalar> MMA::mma_subproblem_t::search_step(gv::gVector& dw, Sc
 	Scalar new_inf_err = 1e30;
 
 	while (step > 1e-12 && new_err > old_err) {
-		std::cout << "trying step " << step << std::endl;
-		std::cout << "----------------------" << std::endl;
+		//std::cout << "trying step " << step << std::endl;
+		//std::cout << "----------------------" << std::endl;
 
 		new_x = mma.x + dx * step;
 		new_y = mma.y + dy * step;
@@ -551,7 +551,7 @@ std::pair<Scalar, Scalar> MMA::mma_subproblem_t::search_step(gv::gVector& dw, Sc
 
 		auto new_two_inf_err = kkt_err(new_x, new_y, new_z, new_lambda, new_xi, new_eta, new_mu, new_zeta, new_s, lambda_damp);
 
-		std::cout << "new : ||delta||_2 = " << new_two_inf_err.first << ", " << "||delta||_inf = " << new_two_inf_err.second << std::endl;
+		//std::cout << "new : ||delta||_2 = " << new_two_inf_err.first << ", " << "||delta||_inf = " << new_two_inf_err.second << std::endl;
 
 
 		new_err = new_two_inf_err.first;
@@ -564,7 +564,7 @@ std::pair<Scalar, Scalar> MMA::mma_subproblem_t::search_step(gv::gVector& dw, Sc
 		}
 		step /= 2;
 
-		std::cout << std::endl;
+		//std::cout << std::endl;
 	}
 	
 	return std::pair<Scalar, Scalar>(new_inf_err, step);
@@ -582,7 +582,14 @@ std::pair<Scalar, Scalar> MMA::mma_subproblem_t::kkt_err(
 
 	update_pqlambda(new_lambda);
 
-	kkt_err_tmp.resize(mma.n_dim());
+	if (mma.n_dim() > mma.n_constrain())
+	{
+		kkt_err_tmp.resize(mma.n_dim());
+	}
+	else
+	{
+		kkt_err_tmp.resize(mma.n_constrain());
+	}
 	int tag = 0;
 
 	auto rex = gv::gVectorMap(kkt_err_tmp.data(), mma.n_dim());
@@ -598,7 +605,7 @@ std::pair<Scalar, Scalar> MMA::mma_subproblem_t::kkt_err(
 	err_max = (std::max)(err_max, rey.infnorm());
 
 	err_sum += pow(mma.a0 - new_zeta - new_lambda.dot(mma.a), 2.0);
-	std::cout << "rez = " << mma.a0 - new_zeta - new_lambda.dot(mma.a) << std::endl;
+	//std::cout << "rez = " << mma.a0 - new_zeta - new_lambda.dot(mma.a) << std::endl;
 	err_max = (std::max)(err_max, abs(mma.a0 - new_zeta - new_lambda.dot(mma.a)));
 
 	gv::gVector g(mma.n_constrain());
@@ -633,7 +640,7 @@ std::pair<Scalar, Scalar> MMA::mma_subproblem_t::kkt_err(
 	err_max = (std::max)(err_max, remu.infnorm());
 
 	err_sum += pow(new_zeta*new_z - mma.epsilon, 2.0);
-	std::cout << "rezet = " << new_zeta * new_z - mma.epsilon << std::endl;
+	//std::cout << "rezet = " << new_zeta * new_z - mma.epsilon << std::endl;
 	err_max = (std::max)(err_max, abs(new_zeta*new_z - mma.epsilon));
 
 	auto res = gv::gVectorMap(kkt_err_tmp.data(), mma.n_constrain());

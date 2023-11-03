@@ -6,6 +6,7 @@
 #include "config_parser.h"
 #include "optimization.h"
 #include "test_utils.h"
+#include "mma_t.h"
 
 extern void version_info(void);
 std::string version_hash(void);
@@ -19,6 +20,7 @@ int main(int argc, char** argv)
 {
 	version_info();
 	init_cuda();
+	//MMA::test_mma();
 
 	selfTest();
 

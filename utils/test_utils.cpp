@@ -699,8 +699,9 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 
 	double Vc = Vgoal - params.volume_ratio;
 
-	//  
+	//  Initialization of MMA
 	MMA::mma_t mma(grids[0]->n_gselements, 1);
+	// here set the lower and upper bound of design variables
 	mma.init(params.min_rho, 1);
 	float volScale = 1e3;
 	float sensScale = 1e5;

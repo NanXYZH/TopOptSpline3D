@@ -7,6 +7,7 @@
 #include <vector>
 #include "templateMatrix.h"
 //#include "gpuVector.h"
+#include "mma_t.h"
 
 extern  __constant__  double gTemplateMatrix[24][24];
 extern  __constant__ int* gV2E[8];
@@ -497,6 +498,9 @@ void selfTest(void)
 
 		cudaFree(_bufdev);
 	}
+
+	//
+	//MMA::test_mma();
 
 	if (pass_test) {
 		printf("-- Pass test\n");

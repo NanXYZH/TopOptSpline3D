@@ -166,8 +166,9 @@ namespace MMA {
 
 	void test_mma(void) {
 		// test 1-dim
-		if (0)
+		if (1)
 		{
+			printf(" MMA TESTING of 1 dim with 1 constrain \n");
 			auto f = [](Scalar x) {
 				return x * exp(-x * x) + sin(x);
 			};
@@ -214,6 +215,7 @@ namespace MMA {
 		// test 2-dim
 		if (1)
 		{
+			printf(" MMA TESTING of 2 dim with 4 constrains \n");
 			auto f = [](Scalar x, Scalar y) {
 				return x / 2 + y * sqrt(3) / 2 + exp(10 * pow(x - y, 2));
 			};
