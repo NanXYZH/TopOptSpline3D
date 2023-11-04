@@ -56,7 +56,7 @@ extern __constant__ double* gLoadnormal[3];
 extern gBitSAT<unsigned int> vid2loadid;
 
 __device__ float Heaviside(float s) {
-#if 0
+#if 1
 	return s;
 #else
 	float T = 0.5f;
@@ -75,7 +75,7 @@ __device__ float Heaviside(float s) {
 }
 
 __device__ float Dirac(float s) {
-#if 0
+#if 1
 	return 1;
 #else
 	float T = 0.5f;

@@ -640,7 +640,7 @@ void TestSuit::testOrdinaryTopopt(void)
 		//double c = grids.solveFEM();
 		double rel_res = 1;
 		int femit = 0;
-		while (rel_res > 1e-2 && femit++ < 50) {
+		while (rel_res > 1e-3 && femit++ < 50) {
 			rel_res = grids.v_cycle(1, 1);
 		}
 		double c = grids[0]->compliance();
@@ -729,7 +729,7 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 		double rel_res = 1;
 		int femit = 0;
 		while (rel_res > 1e-2 && femit++ < 50) {
-			rel_res = grids.v_cycle(1, 1);
+			rel_res = grids.v_cycle(5, 5);
 		}
 		double c = grids[0]->compliance();
 		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);

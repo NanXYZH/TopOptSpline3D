@@ -711,7 +711,7 @@ void setBoundaryCondition(std::function<bool(double[3])> fixarea, std::function<
 
 void initDensities(double rho)
 {
-#if 0
+#if 1
 	grids[0]->init_rho(rho);
 #else
 	float* rh0_noise = new float[grids[0]->n_rho()];

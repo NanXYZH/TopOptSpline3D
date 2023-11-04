@@ -126,7 +126,6 @@ void computeSensitivity(void) {
 
 	// init sensitivity to zero
 	init_array(grids[0]->getSens(), float{ 0 }, grids[0]->n_rho());
-	cuda_error_check;
 
 	size_t grid_size, block_size;
 	make_kernel_param(&grid_size, &block_size, grids[0]->n_nodes(), 512);
@@ -147,15 +146,6 @@ void computeSensitivity(void) {
 	size_t free_mem, total_mem;
 	cudaMemGetInfo(&free_mem, &total_mem);
 	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
-
-	//// rho_diff 2 coeff_diff
-	//grids[0]->ddensity2dcoeff();
-
-	//cudaMemGetInfo(&free_mem, &total_mem);
-	//std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
-
-	//// DEBUG
-	//grids[0]->csens2matlab("csensfilt1");
 
 	// rho_diff 2 coeff_diff
 	grids[0]->ddensity2dcoeff_update();
@@ -210,16 +200,11 @@ float updateDensities(float Vgoal) {
 
 	// compute old volume ratio
 	double* sum = (double*)grid::Grid::getTempBuf(sizeof(double) * grids[0]->n_rho() / 100);
-	cuda_error_check;
 	double Vold = parallel_sum_d(grids[0]->getRho(), sum, grids[0]->n_rho()) / grids[0]->n_rho();
-	cuda_error_check;
-	std::cout << " test vold : " << Vold << std::endl;
 
 	// compute maximal sensitivity
-	float* maxdump = (float*)grid::Grid::getTempBuf(sizeof(float)* grids[0]->n_rho() / 100);
+	float* maxdump = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_rho() / 100);
 	float g_max = parallel_maxabs(grids[0]->getSens(), maxdump, grids[0]->n_rho());
-	cuda_error_check;
-	std::cout << " test gmax : " << g_max << std::endl;
 
 	g_thres_upp = g_max;
 
@@ -231,13 +216,13 @@ float updateDensities(float Vgoal) {
 	int itn = 0;
 
 	// bisection search sensitivity multiplier
-	do  {
+	do {
 		// update sensitivity threshold
 		g_thres = (g_thres_low + g_thres_upp) / 2;
 
 		printf("-- searching multiplier g = %4.4e", g_thres);
 
-		float* newrho = (float*)grid::Grid::getTempBuf(sizeof(float)* grids[0]->n_rho());
+		float* newrho = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_rho());
 
 		// update new rho
 		trySensMultiplier_kernel << <grid_size, block_size >> > (
@@ -262,7 +247,7 @@ float updateDensities(float Vgoal) {
 	trySensMultiplier_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_rho, grids[0]->getRho());
 	cudaDeviceSynchronize();
 	cuda_error_check;
-	
+
 	return g_thres;
 }
 
@@ -404,7 +389,6 @@ float updateCoeff(float Vgoal) {
 
 	return g_thres;
 }
-
 
 
 extern void matlab_utils_test(void);
