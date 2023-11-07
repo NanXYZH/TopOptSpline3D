@@ -18,6 +18,7 @@ public:
 	MCImplicitRender(float minV1, float minV2, int Nodes[3], TriMesh3D *mesh_, string file_);
 	~MCImplicitRender();
 
+	void AddSetting(float minV1, float minV2, int Nodes[3], TriMesh3D* mesh_, float boxmin[3], float boxmax[3]);
 	void InitData();
 	void InitSurface();
 	void RunMarchingCubesTestPotential(float& minValuePotential, std::vector<float> bg_node[3], std::vector<float>& mcPoints_inner_val);

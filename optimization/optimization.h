@@ -43,6 +43,8 @@ void setParameters(
 
 void setOutpurDir(const std::string& dirname);
 
+void setInputMesh(const std::string& inputmesh);
+
 void setWorkMode(const std::string& modestr);
 
 void setDEBUG(bool debug = false);
@@ -91,7 +93,6 @@ void initDensities(double rho);
 void initCoeffs(double coeff);
 
 // MARK
-void Coeff2Density(void);
 
 void update_stencil(void);
 

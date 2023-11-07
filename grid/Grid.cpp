@@ -11,6 +11,10 @@
 #include "tictoc.h"
 #include <set>
 
+#include "MCrender.h"
+#include "TriMesh3D.h"
+
+
 using namespace grid;
 
 #ifdef __linux__
@@ -1568,7 +1572,13 @@ void Grid::setOutDir(const std::string& outdir)
 	_outdir = outdir;
 }
 
+void Grid::setMeshFile(const std::string& meshfile)
+{
+	_meshfile = meshfile;
+}
+
 std::string grid::Grid::_outdir;
+std::string grid::Grid::_meshfile;
 
 void* grid::Grid::_tmp_buf = nullptr;
 size_t grid::Grid::_tmp_buf_size = 0;
@@ -2562,6 +2572,72 @@ void Grid::v3_toMatlab(const std::string& nam, double* v[3])
 	eigen2ConnectedMatlab(nam, vmat);
 #endif
 }
+
+void Grid::generate_surface_nodes_by_MC(const std::string& fileName, int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3], std::vector<float> mcPoints_in)
+{
+	MCImplicitRender* mc_render;
+	TriMesh3D* ptr_mesh_;
+	ptr_mesh_ = new TriMesh3D;
+	std::string filename = fileName;
+	//std::cout << filename << std::endl;
+	std::string key_file;
+	ptr_mesh_->LoadFile(filename.data());
+	//mc_render = new MCImplicitRender(0, 1e-6, Nodes, ptr_mesh_, key_file);
+	mc_render = new MCImplicitRender();
+
+	float boxOrigin[3] = { _box[0][0],_box[0][1],_box[0][2] };
+	float boxEnd[3] = { _box[1][0],_box[1][1],_box[1][2] };
+
+	mc_render->AddSetting(0, 1e-6, Nodes, ptr_mesh_, boxOrigin, boxEnd);
+	//mc_render = new MCImplicitRender();
+	//mc_render->DoMC();
+	//mc_render->InitData();
+	float minValue = 0.f;
+	//std::vector<mp4vector> mcPoints;
+
+	mc_render->RunMarchingCubesTestPotential(minValue, bg_node, mcPoints_in);
+	mc_render->save_to_surface_node(surface_node_x, surface_node_y, surface_node_z);
+	//mc_render->InnerTransferToOpenMesh(surface_node_x, surface_node_y, surface_node_z);
+	//mc_render->TransferToOpenMesh();
+	//mc_render->SavePoints(output_filename);
+
+	//ptr_mesh_->SaveFile("./output/isosurface.obj");
+}
+
+void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3])
+{
+
+}
+
+
+void Grid::generate_spline_surface_nodes(void)
+{
+	std::vector<float> mcPoints_val;
+	std::vector<float> bgnodex;
+	std::vector<float> bgnodey;
+	std::vector<float> bgnodez;
+	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val);
+
+	std::vector<float> bgnode[3];
+	bgnode[0].insert(bgnode[0].end(), bgnodex.begin(), bgnodex.end());
+	bgnode[1].insert(bgnode[1].end(), bgnodey.begin(), bgnodey.end());
+	bgnode[2].insert(bgnode[2].end(), bgnodez.begin(), bgnodez.end());
+	int ereso3 = _ereso * _ereso * _ereso;
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<float, -1, 1> node_value;
+	node_value.resize(ereso3, 1);
+	std::copy(mcPoints_val.begin(), mcPoints_val.end(), node_value.begin());
+	eigen2ConnectedMatlab("rhomc1", node_value);
+#endif
+
+	int N[3] = { _ereso, _ereso, _ereso };
+	// MARK[TODO] use mc to generate surface nodes
+	generate_surface_nodes_by_MC(_meshfile, N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode, mcPoints_val);
+
+	//
+	compute_surface_nodes_in_model(N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode);
+}
+
 
 double Grid::compliance(void)
 {

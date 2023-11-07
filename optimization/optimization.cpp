@@ -87,6 +87,13 @@ void setOutpurDir(const std::string& dirname)
 	grids.setOutPath(outdir);
 }
 
+void setInputMesh(const std::string& inputmesh)
+{
+	std::string meshfile = inputmesh;
+	grids.setMeshFile(meshfile);
+}
+
+
 void setWorkMode(const std::string& modestr)
 {
 	if (modestr == "nscf") {
@@ -726,7 +733,7 @@ void initDensities(double rho)
 
 void initCoeffs(double coeff)
 {
-#if 1
+#if 0
 	grids[0]->init_coeff(coeff);
 #else
 	float* coeff_noise = new float[grids[0]->n_cijk()];
@@ -737,11 +744,6 @@ void initCoeffs(double coeff)
 	grids[0]->init_coefflist(coeff_noise);
 	delete[] coeff_noise;
 #endif
-}
-
-void Coeff2Density()
-{
-	grids.coeff2density();
 }
 
 void update_stencil(void)

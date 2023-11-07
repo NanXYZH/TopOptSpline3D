@@ -175,10 +175,12 @@ namespace grid {
 	{
 	public:
 		static std::string _outdir;
+		static std::string _meshfile;
 		static void* _tmp_buf;
 		static size_t _tmp_buf_size;
 		static Mode _mode;
 		static void setOutDir(const std::string& outdir);
+		static void setMeshFile(const std::string& meshfile);
 		static const std::string& getOutDir(void);
 		static void* getTempBuf(size_t requre);
 		static void* getTempBuf1(size_t requre);
@@ -267,6 +269,8 @@ namespace grid {
 		int n_elements = 0;
 		int n_gsvertices = 0;
 		int n_gselements = 0;
+
+		std::vector<float> spline_surface_node[3];
 				
 		std::map<std::string, double> _keyvalues;
 
@@ -477,6 +481,12 @@ namespace grid {
 
 		void resetDirchlet(double* v_dev[3]);
 
+		void generate_spline_surface_nodes(void);
+
+		void generate_surface_nodes_by_MC(const std::string& fileName, int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3], std::vector<float> mcPoints_in);
+
+		void compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3]);
+
 		double compliance(void);
 
 		void update_residual(void);
@@ -527,9 +537,11 @@ namespace grid {
 				
 		void coeff2density(void);
 
-		void ddensity2dcoeff(void);
+		void ddensity2dcoeff(void);        // not use
 
 		void ddensity2dcoeff_update(void);
+
+		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value);
 
 		double unitizeForce(void);
 
@@ -646,6 +658,8 @@ namespace grid {
 
 		std::string _outdir;
 
+		std::string _meshfile;
+
 		float _min_density;
 
 		Mode _mode;
@@ -670,6 +684,8 @@ namespace grid {
 
 		void setOutPath(const std::string& outpath) { _outdir = outpath; Grid::_outdir = outpath; }
 
+		void setMeshFile(const std::string& meshfile) { _meshfile = meshfile; Grid::_meshfile = meshfile; }
+
 		std::string getPath(const std::string& nfile) { return _outdir + nfile; }
 
 		bool isForceFree(void) { return _mode == no_support_free_force || _mode == with_support_free_force; }
@@ -688,9 +704,6 @@ namespace grid {
 		void testShell(void);
 
 		void fillShell(void);
-
-		// about spline
-		void coeff2density(void);
 
 		void lambdatest(void);
 

@@ -35,6 +35,8 @@ int main(int argc, char** argv)
 
 	setOutpurDir(FLAGS_outdir);
 
+	setInputMesh(FLAGS_meshfile);
+
 	setWorkMode(FLAGS_workmode);
 
 	setBoundaryCondition(parser.inFixArea, parser.inLoadArea, parser.loadField);

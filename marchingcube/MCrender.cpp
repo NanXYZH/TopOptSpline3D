@@ -70,7 +70,34 @@ MCImplicitRender::MCImplicitRender(float minV1, float minV2, int Nodes[3], TriMe
 	tvSpline_fun->InitCoffi(file_);
 }
 
+
 MCImplicitRender::~MCImplicitRender(){}
+
+void MCImplicitRender::AddSetting(float minV1, float minV2, int Nodes[3], TriMesh3D* mesh_, float boxmin[3], float boxmax[3])
+{
+	minValueBoundary = minV1;
+	minValuePotential = minV2;
+	Point3 minp = mesh_->PointMin();
+	Point3 maxp = mesh_->PointMax();
+	meshSize = mesh_->MeshSize();
+	center = mesh_->PointCenter();
+
+	//Point3 step_ = (maxp - minp) / X;
+	//radius = min(step_.data()[0], min(step_.data()[1], step_.data()[2]));
+	/*Point3 boundingbox = (maxp - minp) / radius;*/
+	//std::cout << nX << ", " << nY << ", " << nZ << std::endl;
+	//nX = size_t(std::ceil(boundingbox[0]));
+	//nY = size_t(std::ceil(boundingbox[1]));
+	//nZ = size_t(std::ceil(boundingbox[2]));
+	//std::cout << nX << ", " << nY << ", " << nZ << std::endl;
+	radius = (maxp.data()[0] - minp.data()[0]) / Nodes[0];
+	nX = Nodes[0];
+	nY = Nodes[1];
+	nZ = Nodes[2];
+	surfaceMesh = mesh_;
+	voxelMin = center - Point3((double)nX, (double)nY, (double)nZ) / 2.0 * radius;
+	voxelMax = voxelMin + Point3((double)nX, (double)nY, (double)nZ) * radius;
+}
 
 void MCImplicitRender::InitSurface()
 {
@@ -115,7 +142,7 @@ void MCImplicitRender::InitData()
 	}
 }
 
-void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, std::vector<float> bg_node[3],std::vector<float>& mcPoints_inner_val)
+void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, std::vector<float> bg_node[3], std::vector<float>& mcPoints_inner_val)
 {
 	mcPoints.clear();
 	int n = bg_node->size();
@@ -133,18 +160,18 @@ void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, s
 	std::cout << "(" << nX << ", " << nY << ", " << nZ << ") " << nX* nY*nZ<< std::endl;
 	std::cout << mcPoints_inner_val.size() << std::endl;
 	std::cout << bg_node->size() << std::endl;
-	delete[] Triangles;	//first free the previous allocated memory
+	delete[] Triangles;	  //first free the previous allocated memory
+	Triangles = nullptr;
 	Triangles = MarchingCubes(nX - 1, nY - 1, nZ - 1, 1.0, 1.0, 1.0, minValuePotential, mcPoints, numOfTriangles);
 	//std::cout << "Marching cube test \n" << "Surface node number:" << mcPoints.size() << std::endl;
 	int num = 0;
 	for (int i = 0; i < mcPoints.size(); i++)
 	{
-		if (mcPoints[i].val < 1e-6)
+		if (mcPoints[i].val > 1e-6)
 		{
 			//std::cout << mcPoints[i].x << "," << mcPoints[i].y << "," << mcPoints[i].z << "," << mcPoints[i].val << "," << std::endl;
 			num++;
 		}
-		// need to be ckeck (why values all zero?????????)
 		//std::cout << mcPoints[i].x << "," << mcPoints[i].y << "," << mcPoints[i].z << "," << mcPoints[i].val << "," << std::endl;
 	}
 	std::cout << "sample nodes number: " << num  << "/" << mcPoints.size() << std::endl;
@@ -162,22 +189,14 @@ void MCImplicitRender::RunMarchingCubesTest()
 	delete[] Triangles;	//first free the previous allocated memory
 	Triangles = nullptr;
 	Triangles = MarchingCubes(nX - 1, nY - 1, nZ - 1, 1.0, 1.0, 1.0, minValuePotential, mcPoints, numOfTriangles);
-	//std::cout << "Nx * Ny * Nz = " << nX << " * " << nY << " * " << nZ << std::endl;
-	//std::cout << "Marching cube test \n" << "Surface node number :" << mcPoints.size() << std::endl;
 	int num = 0;
-	//for (int i = 0; i < mcPoints.size(); i++)
 	for (int i = 0; i < mcPoints.size(); i++)
 	{
 		if (mcPoints[i].val > 1e-6)
 		{
-			//std::cout << mcPoints[i].x << "," << mcPoints[i].y << "," << mcPoints[i].z << "," << mcPoints[i].val << "," << std::endl;
 			num++;
 		}
-		// need to be ckeck (why values all zero?????????)
-		//std::cout << mcPoints[i].x << "," << mcPoints[i].y << "," << mcPoints[i].z << "," << mcPoints[i].val << "," << std::endl;
 	}
-	//std::cout << "sample nodes number: " << num << std::endl;
-	//std::cout << "-=-=-=-=-=-=-=-=-=-=-=-=-=-" << std::endl;
 }
 
 void MCImplicitRender::RunMarchingCubesTestBoundary()
@@ -421,6 +440,7 @@ void MCImplicitRender::InnerTransferToOpenMesh(std::vector<float>& surface_node_
 	}
 
 	delete[] Triangles;
+	Triangles = nullptr;
 	mesh.garbage_collection();
 }
 
@@ -464,28 +484,6 @@ void MCImplicitRender::save_to_surface_node(std::vector<float>& surface_node_x, 
 	surface_node_y = vert_fine[1];
 	surface_node_z = vert_fine[2];
 
-
-	//if (vert_fine->size() < num_surface_points)
-	//{
-	//	surface_node_x = vert_fine[0];
-	//	surface_node_y = vert_fine[1];
-	//	surface_node_z = vert_fine[2];
-	//} 
-	//else
-	//{
-	//	int set_step = vert_fine->size() / (num_surface_points * 10);
-	//	for (int j = 0; j < num_surface_points * set_step * 10; j = j + set_step)
-	//	{
-	//		vert_final[0].push_back(vert_fine[0][j]);
-	//		vert_final[1].push_back(vert_fine[1][j]);
-	//		vert_final[2].push_back(vert_fine[2][j]);
-	//	}
-	//	surface_node_x = vert_final[0];
-	//	surface_node_y = vert_final[1];
-	//	surface_node_z = vert_final[2];
-	//}
-	//std::cout << "Surface node number( after sampled ): " << vert_final->size() << std::endl;
-
 	for (int i = 0; i < 3; i++)
 	{
 		std::vector<float>().swap(vert[i]);
@@ -494,6 +492,7 @@ void MCImplicitRender::save_to_surface_node(std::vector<float>& surface_node_x, 
 	}
 
 	delete[] Triangles;
+	Triangles = nullptr;
 	mesh.garbage_collection();
 }
 

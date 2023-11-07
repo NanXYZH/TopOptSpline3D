@@ -2923,7 +2923,6 @@ void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int
 	//delete[] basishost;
 	//delete[] knotspanhost;
 	//std::cout << "------------------------------------------------------ " << std::endl;
-
 }
 
 void Grid::set_spline_knot_info(void)
@@ -3001,6 +3000,7 @@ void Grid::set_spline_knot_info(void)
 	for (int i = 0; i < 3; i++)
 	{
 		delete[] KnotSerhost[i];
+		KnotSerhost[i] = nullptr;
 	}
 //	delete[] KnotSerhost;
 #endif
@@ -3126,9 +3126,13 @@ void Grid::coeff2density(void)
 	float* rhohost = new float[n_gselements];
 	//cudaMemcpy(rhohost, _gbuf.rho_e, n_gselements, cudaMemcpyDeviceToHost);
 	gpu_manager_t::download_buf(rhohost, _gbuf.rho_e, sizeof(float)* n_gselements);
-	cuda_error_check;
 	gpu_manager_t::pass_buf_to_matlab("rhoe1", rhohost, n_gselements);
 	cuda_error_check;
+
+	delete[] coeffhost;
+	coeffhost = nullptr;
+	delete[] rhohost;
+	rhohost = nullptr;
 }
 
 template<typename Func>
@@ -3545,20 +3549,171 @@ void HierarchyGrid::lambdatest(void)
 	delete[] drr_data;
 }
 
+//template<typename coeffdensity>
+//__global__ void MCdensity_kernel(int nebitword, float mindensity, gBitSAT<unsigned int> esat, int ereso, float* g_dst, coeffdensity calc_node, const int* eidmap, const int* eflag) {
+//	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+//	if (tid >= nebitword) return;
+//
+//	const unsigned int* ebit = esat._bitarray;
+//	const int* sat = esat._chunksat;
+//
+//	unsigned int eword = ebit[tid];
+//
+//	if (eword == 0) return;
+//
+//	int eidoffset = sat[tid];
+//	int ewordoffset = 0;
+//	for (int j = 0; j < BitCount<unsigned int>::value; j++) {
+//		if (read_gbit(eword, j)) {
+//			int bid = tid * BitCount<unsigned int>::value + j;
+//			int bpos[3] = { bid % ereso, bid % (ereso * ereso) / ereso, bid / (ereso * ereso) };
+//			int eid = eidoffset + ewordoffset;
+//			float node_value = calc_node(bid);
+//			if (eidmap != nullptr) eid = eidmap[eid];
+//
+//			// check the shellelement of rho_e
+//			node_value = clamp(node_value, mindensity, 1.f);
+//			if (eflag[eid] & grid::Grid::mask_shellelement)
+//			{
+//				node_value = 1;
+//			}
+//			// rhoknew = clamp(rhoknew, rhomin, 1.f);
+//			// if (gEflag[0][eid] & grid::Grid::Bitmask::mask_shellelement) rhonew = 1;
+//			g_dst[eid] = node_value;
+//			ewordoffset++;
+//		}
+//	}
+//}
 
-// MARK: coeff2density
-void HierarchyGrid::coeff2density(void)
+void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value)
 {
+	if (_layer != 0) return;
+
 	// computation
-	float* cijk_value = _gridlayer[0]->_gbuf.coeffs;
-	float* knotx_ = _gridlayer[0]->_gbuf.KnotSer[0];
-	float* knoty_ = _gridlayer[0]->_gbuf.KnotSer[1];
-	float* knotz_ = _gridlayer[0]->_gbuf.KnotSer[2];
-	int ereso = _gridlayer[0]->_ereso;
+	float* cijk_value = _gbuf.coeffs;
+	float* knotx_ = _gbuf.KnotSer[0];
+	float* knoty_ = _gbuf.KnotSer[1];
+	float* knotz_ = _gbuf.KnotSer[2];
+	float* rholist = _gbuf.rho_e;
 
+	int ereso = _ereso;
+	int vreso = _ereso + 1;
+	float eh = elementLength();
+	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+	float min_Density = _min_density;
 
+	float* nodex;
+	float* nodey;
+	float* nodez;
+	float* node_value;
+	int ereso3 = ereso * ereso * ereso;
+	int vreso3 = vreso * vreso * vreso;
+	cudaMalloc(&node_value, sizeof(float) * ereso3);
+	init_array(node_value, float{ 0 }, ereso3);
+	cudaMalloc(&nodex, sizeof(float) * ereso3);
+	init_array(nodex, float{ 0 }, ereso3);
+	cudaMalloc(&nodey, sizeof(float) * ereso3);
+	init_array(nodey, float{ 0 }, ereso3);
+	cudaMalloc(&nodez, sizeof(float) * ereso3);
+	init_array(nodez, float{ 0 }, ereso3);
+	cuda_error_check;
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, ereso3, 512);
+
+	auto calc_node = [=] __device__(int id) {
+		int xCoordi = id % ereso;
+		int yCoordi = (id % (ereso * ereso)) / ereso;
+		int zCoordi = id / (ereso * ereso);
+		float pos[3] = { boxOrigin[0] + xCoordi * eh + 0.5 * eh,boxOrigin[1] + yCoordi * eh + 0.5 * eh, boxOrigin[2] + zCoordi * eh + 0.5 * eh };
+
+		float val;
+		int i, j, k, ir, it, is, index;
+
+		float pNX[m_iM + 1];
+		float pNY[m_iM + 1];
+		float pNZ[m_iM + 1];
+
+		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
+		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
+		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
+		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
+
+		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
+		{
+			val = -0.2f;
+		}
+		else
+		{
+			SplineBasisX(pos[0], pNX);
+			SplineBasisY(pos[1], pNY);
+			SplineBasisZ(pos[2], pNZ);
+
+			val = 0.0f;
+			//index = i + j * m_im + k * m_im * m_in;
+			for (ir = i - gorder[0]; ir < i; ir++)
+			{
+				for (is = j - gorder[0]; is < j; is++)
+				{
+					for (it = k - gorder[0]; it < k; it++)
+					{
+						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
+						val += cijk_value[index] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+					}
+				}
+			}
+		}
+		nodex[id] = pos[0];
+		nodey[id] = pos[1];
+		nodez[id] = pos[2];
+		node_value[id] = Heaviside(val) - 0.45;
+	};
+
+	traverse_noret << < grid_size, block_size >> > (ereso3, calc_node);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	//gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
+
+	//init_array(_gbuf.rho_e, float{ 0 }, n_gselements);
+
+	//MCdensity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, min_Density, esat, _ereso, _gbuf.rho_e, calc_node, _gbuf.eidmap, _gbuf.eBitflag);
+	//cudaDeviceSynchronize();
+	//cuda_error_check;
+	spline_value.resize(ereso3);
+	cudaMemcpy(spline_value.data(), node_value, ereso3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	bgnode_x.resize(ereso3);
+	cudaMemcpy(bgnode_x.data(), nodex, ereso3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	bgnode_y.resize(ereso3);
+	cudaMemcpy(bgnode_y.data(), nodey, ereso3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	bgnode_z.resize(ereso3);
+	cudaMemcpy(bgnode_z.data(), nodez, ereso3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+
+#ifdef ENABLE_MATLAB
+	float* rhohost = new float[ereso3];
+	cudaMemcpy(rhohost, node_value, ereso3 * sizeof(float), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	gpu_manager_t::pass_buf_to_matlab("rhomc", rhohost, ereso3);
+	gpu_manager_t::pass_buf_to_matlab("bgnodex", bgnode_x.data(), ereso3);
+	gpu_manager_t::pass_buf_to_matlab("bgnodey", bgnode_y.data(), ereso3);
+	gpu_manager_t::pass_buf_to_matlab("bgnodez", bgnode_z.data(), ereso3);
+#endif
+
+	cudaFree(node_value);
+	cudaFree(nodex);
+	cudaFree(nodey);
+	cudaFree(nodez);
+	node_value = nullptr;
+	nodex = nullptr;
+	nodey = nullptr;
+	nodez = nullptr;
+	delete[] rhohost;
+	rhohost = nullptr;
 }
-
 
 template<typename WeightRadius>
 __global__ void filterSensitivity_kernel(int nebitword, gBitSAT<unsigned int> esat, int ereso, const float* g_sens, float* g_dst, float Rfilter, WeightRadius fr, const int* eidmap) {
