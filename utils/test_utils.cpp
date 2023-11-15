@@ -804,7 +804,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	float Vgoal = 1;
 #endif
 
-	grids[0]->generate_spline_surface_nodes();
+	//grids[0]->generate_spline_surface_nodes();
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 

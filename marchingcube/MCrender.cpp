@@ -157,7 +157,7 @@ void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, s
 	{
 		return;
 	}
-	std::cout << "(" << nX << ", " << nY << ", " << nZ << ") " << nX* nY*nZ<< std::endl;
+	std::cout << "(" << nX << ", " << nY << ", " << nZ << ") " << nX * nY * nZ << std::endl;
 	std::cout << mcPoints_inner_val.size() << std::endl;
 	std::cout << bg_node->size() << std::endl;
 	delete[] Triangles;	  //first free the previous allocated memory
@@ -167,7 +167,7 @@ void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, s
 	int num = 0;
 	for (int i = 0; i < mcPoints.size(); i++)
 	{
-		if (mcPoints[i].val > 1e-6)
+		if (mcPoints[i].val < 1e-6)
 		{
 			//std::cout << mcPoints[i].x << "," << mcPoints[i].y << "," << mcPoints[i].z << "," << mcPoints[i].val << "," << std::endl;
 			num++;
@@ -472,7 +472,6 @@ void MCImplicitRender::save_to_surface_node(std::vector<float>& surface_node_x, 
 			vert[2].push_back(p[2]);
 		}
 	}
-	std::cout << vert->size() << std::endl;
 	for (int i = 0; i < vert->size(); i = i + 3)
 	{
 		vert_fine[0].push_back(vert[0][i]);
@@ -523,20 +522,6 @@ void MCImplicitRender::TransferToOpenMesh()
 	mesh.request_vertex_normals();
 	mesh.request_face_normals();
 	implicit_mesh = mesh;
-
-	//try
-	//{
-	//	if (!OpenMesh::IO::write_mesh(implicit_mesh, "implicit.off"))
-	//	{
-	//		std::cerr << "Cannot write mesh to file 'implicit.off'" << std::endl;
-	//		//return 1;
-	//	}
-	//}
-	//catch (std::exception& x)
-	//{
-	//	std::cerr << x.what() << std::endl;
-	//	//return 1;
-	//}
 }
 
 void MCImplicitRender::SavePoints(const std::string& output_filename)
@@ -555,7 +540,7 @@ void MCImplicitRender::SavePoints(const std::string& output_filename)
 		}
 		else
 		{
-			printf("-- Marching cube Test Passed ");
+			printf("-- Marching cube Test Passed \n");
 		}
 	}
 	catch (std::exception& x)

@@ -24,6 +24,7 @@ int main(int argc, char** argv)
 	//MMA::test_mma();
 	testMarchingCube();
 
+	//cgalTest();
 	selfTest();
 
 	parser.parse(argc, argv);
@@ -41,7 +42,7 @@ int main(int argc, char** argv)
 
 	setBoundaryCondition(parser.inFixArea, parser.inLoadArea, parser.loadField);
 	
-	buildGrids(parser.mesh_vertices, parser.mesh_faces);
+	buildGrids(parser.mesh_vertices, parser.mesh_faces, parser.mesh_);
 
 	uploadTemplateMatrix();
 

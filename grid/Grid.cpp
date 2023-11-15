@@ -6,14 +6,44 @@
 #include "matlab_utils.h"
 #include "Eigen/IterativeLinearSolvers"
 #include "Eigen/SparseQR"
+#include "Eigen/Eigen"
 #include "binaryIO.h"
 #include "openvdb_wrapper_t.h"
 #include "tictoc.h"
 #include <set>
+#include <random>
+
+#include <CGAL/Polygon_mesh_processing\distance.h>
+#include "CGAL/Surface_mesh.h"
+#include "CGAL/Simple_cartesian.h"
+#include <CGAL/AABB_tree.h>
+#include <CGAL/AABB_traits.h>
+#include <CGAL/AABB_triangle_primitive.h>
+#include "CGAL/AABB_segment_primitive.h"
+
+#include <list>
+#include <array>
+#include <vector>
+#include <CGAL/Simple_cartesian.h>
+
+//#include <CGAL/Simple_cartesian.h>
+//#include <CGAL/point_generators_3.h>
+//#include <CGAL/Orthogonal_k_neighbor_search.h>
+//#include <CGAL/Search_traits_3.h>
+//#include <tbb/blocked_range.h>
+//#include <tbb/parallel_for.h>
+//using K = CGAL::Simple_cartesian<double>;
+//using Point_3 = K::Point_3;
+//using CGTraits = CGAL::Search_traits_3<K>;
+//using Neighbor_search = CGAL::Orthogonal_k_neighbor_search<CGTraits>;
+//using Tree = Neighbor_search::Tree;
+//using Point_with_distance = Neighbor_search::Point_with_transformed_distance;
+//using Generator = CGAL::Random_points_in_sphere_3<Point_3>;
 
 #include "MCrender.h"
 #include "TriMesh3D.h"
 
+//#include "fmm.h"
 
 using namespace grid;
 
@@ -24,12 +54,17 @@ using namespace grid;
 #endif
 
 std::vector<Triangle> aabb_tris;
+std::vector<Triangle> tree_tris;
 aabb_tree_t aabb_tree;
+aabb_tree_t tree;
 
 CGMesh::Property_map<Face_descriptor, Vector3> cgmesh_fnormals;
 CGMesh::Property_map<Vertex_descriptor, Vector3> cgmesh_vnormals;
 
 CGMesh cmesh;
+
+Mesh omesh;
+Mesh mesh_entity;
 
 extern HierarchyGrid grids;
 
@@ -40,7 +75,139 @@ static std::vector<int> vlastrowid;
 static int nvlastrows;
 static Eigen::BDCSVD<Eigen::MatrixXd> svd;
 
-void HierarchyGrid::buildAABBTree(const std::vector<float>& pcoords, const std::vector<int>& trifaces)
+namespace Me {
+	template<typename T>
+	T min(const T& a, const T& b) {
+		return a < b ? a : b;
+	}
+	template<typename T>
+	T max(const T& a, const T& b) {
+		return a > b ? a : b;
+	}
+	template<typename T, typename ... Args>
+	T min(const T& a, const T& b, const Args& ...args) {
+		return min(a, min(b, args...));
+	}
+	template<typename T, typename ... Args>
+	T max(const T& a, const T& b, const Args& ...args) {
+		return max(a, max(b, args...));
+	}
+}
+
+void HierarchyGrid::cgalTest(void) {
+	Point a(1.0, 0.0, 0.0);
+	Point b(0.0, 1.0, 0.0);
+	Point c(0.0, 0.0, 1.0);
+	Point d(0.0, 0.0, 0.0);
+	//std::list<Triangle> triangles;
+	//triangles.push_back(Triangle(a, b, c));
+	//triangles.push_back(Triangle(a, b, d));
+	//triangles.push_back(Triangle(a, d, c));
+	tree_tris.clear();
+	tree_tris.emplace_back(a, b, c);
+	tree_tris.emplace_back(a, b, d);
+	tree_tris.emplace_back(a, d, c);
+	// constructs AABB tree
+	tree.clear();
+	tree.rebuild(tree_tris.begin(), tree_tris.end());
+	// counts #intersections
+	Ray ray_query(a, b);
+	std::cout << tree.number_of_intersected_primitives(ray_query)
+		<< " intersections(s) with ray query" << std::endl;
+	// compute closest point and squared distance
+	Point point_query(2.0, 2.0, 2.0);
+	Point closest_point = tree.closest_point(point_query);
+	std::cerr << "closest point is: " << closest_point << std::endl;
+	FT sqd = tree.squared_distance(point_query);
+	std::cout << "squared distance: " << sqd << std::endl;
+
+
+	Kernel::Ray_3 ray3(point_query, closest_point);
+	std::cout << "Type of aabb_tree_t::Primitive_id: " << typeid(aabb_tree_t::Primitive_id).name() << std::endl;
+	//std::vector<std::pair<typename aabb_tree_t::Intersection_and_primitive_id<Triangle>::Type, unsigned>> intersections4;
+	//std::vector<std::pair<typename aabb_tree_t::Intersection_and_primitive_id<Ray>::Type, unsigned>> intersections4;
+	//std::vector<std::pair<typename aabb_tree_t::Point_and_primitive_id, unsigned>> intersections4;
+	//std::vector<aabb_tree_t::Point_and_primitive_id> intersections4;
+	aabb_tree_t3 tree3(tree_tris.begin(), tree_tris.end());
+	closest_point = tree3.closest_point(point_query);
+	std::cerr << "closest point is: " << closest_point << std::endl;
+	std::cout << "Type of AABB_tree::Primitive: " << typeid(Primitive3).name() << std::endl;
+
+	std::vector<std::pair<Primitive3, FT>> intersections4;
+	//tree3.all_intersections(ray3, std::back_inserter(intersections4));
+	//std::cout << "Number of intersections: " << intersections4.size() << std::endl;
+	//// Output the results
+	//for (const auto& intersection : intersections4) {
+	//	const Point& intersection_point = intersection.first.reference_point();
+	//	FT squared_distance = intersection.second;
+	//	std::cout << "Intersection Point: " << intersection_point << ", Squared Distance: " << squared_distance << std::endl;
+	//}
+
+	std::list<Triangle> triangles; 
+	triangles.emplace_back( Triangle(a, b, c) );
+	triangles.emplace_back( Triangle(a, b, d) );
+	triangles.emplace_back( Triangle(a, d, c) );
+	aabb_tree_t1 tree1(triangles.begin(), triangles.end());
+	typedef aabb_tree_t1::Point_and_primitive_id Point_and_primitive_id;
+	Point_and_primitive_id pp = tree1.closest_point_and_primitive(point_query);
+	//tree1.any_reference_point_and_id(point_query);
+	std::cout << "closest point is: " << pp.first << std::endl;
+	std::cout << "Iterator value: " << *(pp.second) << std::endl;
+
+	const Triangle& nearest_triangle = *(pp.second);
+	for (int i = 0; i < 3; i++)
+	{
+		const Point& vertex1 = nearest_triangle.vertex(i);
+		std::cout << "Coordinates of the first vertex: (" << vertex1.x() << ", " << vertex1.y() << ", " << vertex1.z() << ")" << std::endl;
+	}
+
+	Point direction(point_query[0] - pp.first[0], point_query[1] - pp.first[1], point_query[2] - pp.first[2]);
+	float small_move = 0.001f;
+	Point move_length(direction[0] * small_move, direction[1] * small_move, direction[2] * small_move);
+	Point near_closest(pp.first[0] + move_length[0], pp.first[1] + move_length[1], pp.first[2] + move_length[2]);
+
+	Ray ray1(near_closest, point_query);  // point out of the model
+	Ray ray2(point_query, near_closest);  // point in the model
+
+	std::cout << tree.do_intersect(ray1) << std::endl;
+	std::cout << tree.do_intersect(ray2) << std::endl;
+
+	std::list<aabb_tree_t1::Primitive_id> primitives;
+	tree1.all_intersected_primitives(ray1, std::back_inserter(primitives));
+	std::cout << "num of intersections: " << primitives.size() << std::endl;
+	for (std::list<aabb_tree_t1::Primitive_id>::iterator it = primitives.begin(); it != primitives.end(); ++it)
+	{
+		const aabb_tree_t1::Primitive_id& primirives_id = *it;
+		int index = std::distance(primitives.begin(), it);
+		std::cout << "NO." << index << std::endl;
+		std::cout << primirives_id->vertex(0) << ", " << primirives_id->vertex(1) << ", " << primirives_id->vertex(2) << std::endl;
+	}
+
+	std::list<aabb_tree_t1::Primitive_id> primitives2;
+	tree1.all_intersected_primitives(ray2, std::back_inserter(primitives2));
+	std::cout << "num of intersections: " << primitives2.size() << std::endl;
+	for (std::list<aabb_tree_t1::Primitive_id>::iterator it = primitives2.begin(); it != primitives2.end(); ++it)
+	{
+		const aabb_tree_t1::Primitive_id& primirives_id = *it;
+		int index = std::distance(primitives2.begin(), it);
+		std::cout << "NO." << index << std::endl;
+		std::cout << primirives_id->vertex(0) << ", " << primirives_id->vertex(1) << ", " << primirives_id->vertex(2) << std::endl;
+	}
+	std::cout << "num of intersected: "<< tree1.number_of_intersected_primitives(ray1) << std::endl;
+	std::cout << "num of intersected: "<< tree1.number_of_intersected_primitives(ray2) << std::endl;
+
+	if (tree1.number_of_intersected_primitives(ray1) % 2 == 0) {
+		std::cout << "Point1 is outside the AABB tree." << std::endl;
+	}
+	else {
+		std::cout << "Point1 is inside the AABB tree." << std::endl;
+	}
+	//Point p(1.0, 2.0, 3.0);
+	//CGAL::Object object = CGAL::make_object(p);
+	//typedef aabb_tree_t1::Object_and_primitive_id Object_and_primitive_id;
+}
+
+void HierarchyGrid::buildAABBTree(const std::vector<float>& pcoords, const std::vector<int>& trifaces, const Mesh& inputmesh)
 {
 	// build aabb tree
 	aabb_tris.clear();
@@ -53,6 +220,12 @@ void HierarchyGrid::buildAABBTree(const std::vector<float>& pcoords, const std::
 	aabb_tree.clear();
 	aabb_tree.rebuild(aabb_tris.begin(), aabb_tris.end());
 
+	// compute closest point and squared distance
+	Point point_query(2.0, 2.0, 2.0);
+	Point closest_point = aabb_tree.closest_point(point_query);
+	std::cerr << "closest point is: " << closest_point << std::endl;
+	FT sqd = aabb_tree.squared_distance(point_query);
+	std::cout << "squared distance: " << sqd << std::endl;
 
 	// build cgal mesh
 	std::vector<CGMesh::Vertex_index>  vidlist;
@@ -67,6 +240,28 @@ void HierarchyGrid::buildAABBTree(const std::vector<float>& pcoords, const std::
 	cgmesh_vnormals = cmesh.add_property_map<Vertex_descriptor, Vector3>("v:normals", CGAL::NULL_VECTOR).first;
 
 	PMP::compute_normals(cmesh, cgmesh_vnormals, cgmesh_fnormals);
+
+	// build open-mesh mesh
+	Vec3x xm(std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity());
+	Vec3x xM = -xm;
+
+	for (auto itv = inputmesh.vertices_begin(); itv != inputmesh.vertices_end(); itv++) {
+		auto x1 = inputmesh.point(*itv);
+		Vec3x x(x1[0], x1[1], x1[2]);
+		xm.minimize(x);
+		xM.maximize(x);
+	}
+	//mesh_entity = inputmesh;
+	//float scale_ratio = 1.0f;
+
+	//for (auto& vt : mesh_entity.vertices()) {
+	//	mesh_entity.set_point(vt, mesh_entity.point(vt) * scale_ratio);
+	//}
+	//mesh_entity.request_face_normals();
+	//mesh_entity.request_vertex_normals();
+	//mesh_entity.update_normals();
+	omesh = inputmesh;
+	printf("--[TEST] openmesh model bounding box : [%f, %f, %f] -- [%f, %f, %f]\n", xm[0], xm[1], xm[2], xM[0], xM[1], xM[2]);
 }
 
 void HierarchyGrid::setSolidShellElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags) {
@@ -81,7 +276,7 @@ void HierarchyGrid::setSolidShellElement(const std::vector<unsigned int>& ebitfi
 
 	std::set<int> shellelements;
 
-	double wshell = _setting.shell_width*eh;
+	double wshell = _setting.shell_width * eh;
 
 	printf("-- shell width %lf \n", wshell);
 
@@ -97,8 +292,8 @@ void HierarchyGrid::setSolidShellElement(const std::vector<unsigned int>& ebitfi
 		auto fbb = PMP::face_bbox(fidlist[i], cmesh);
 		int lid[3], rid[3];
 		for (int j = 0; j < 3; j++) {
-			lid[j] = (fbb.min_coord(j) - wshell * 1.3 - box[0][j] - 0.5*eh) / eh;
-			rid[j] = (fbb.max_coord(j) + wshell * 1.3 - box[0][j] - 0.5*eh) / eh + 1;
+			lid[j] = (fbb.min_coord(j) - wshell * 1.3 - box[0][j] - 0.5 * eh) / eh;
+			rid[j] = (fbb.max_coord(j) + wshell * 1.3 - box[0][j] - 0.5 * eh) / eh + 1;
 			lid[j] = std::clamp(lid[j], 0, ereso - 1);
 			rid[j] = std::clamp(rid[j], 0, ereso - 1);
 		}
@@ -139,6 +334,7 @@ void HierarchyGrid::setSolidShellElement(const std::vector<unsigned int>& ebitfi
 	}
 }
 
+// MARK[TOupdate]
 void HierarchyGrid::setinModelVertice(const std::vector<unsigned int>& vbitfine, BitSAT<unsigned int>& vsat, float box[2][3], int ereso, std::vector<int>& vflags) {
 	std::vector<CGMesh::Face_index> fidlist;
 	for (auto iter = cmesh.faces_begin(); iter != cmesh.faces_end(); iter++) {
@@ -182,6 +378,9 @@ void HierarchyGrid::setinModelVertice(const std::vector<unsigned int>& vbitfine,
 				for (int z = lid[2]; z < rid[2]; z++) {
 					ec[2] = (z + 0.5) * eh + box[0][2];
 					double d = aabb_tree.squared_distance(Point(ec[0], ec[1], ec[2]));
+
+					// MARK[TODO]
+					// UPDATE to nodes in model
 					if (d < sh2) {
 						int ebid = x + y * ereso + z * ereso * ereso;
 						int eid = vsat(ebid);
@@ -209,7 +408,7 @@ void HierarchyGrid::setinModelVertice(const std::vector<unsigned int>& vbitfine,
 	}
 }
 
-
+// MARK[TOupdate]
 void HierarchyGrid::setinModelElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags) {
 	std::vector<CGMesh::Face_index> fidlist;
 	for (auto iter = cmesh.faces_begin(); iter != cmesh.faces_end(); iter++) {
@@ -280,6 +479,147 @@ void HierarchyGrid::setinModelElement(const std::vector<unsigned int>& ebitfine,
 	}
 }
 
+void HierarchyGrid::_find_grid_node_close_to_face(vec3& v1, vec3& v2, vec3& v3,
+	float spacing, int N[3],
+	std::vector<std::array<int, 3>>& boundary_indices, std::vector<float>& boundary_distance,
+	float box[2][3])
+{
+	float origin[3] = { box[0][0], box[0][1], box[0][2] };
+
+#if 0
+#elif 1
+	Point p1(v1[0], v1[1], v1[2]), p2(v2[0], v2[1], v2[2]), p3(v3[0], v3[1], v3[2]);
+	Kernel::Triangle_3 tri(p1, p2, p3);
+	std::set<std::array<int, 3>> local_close;
+	Point upCorner(Me::max(v1[0], v2[0], v3[0]), Me::max(v1[1], v2[1], v3[1]), Me::max(v1[2], v2[2], v3[2]));
+	Point downCorner(Me::min(v1[0], v2[0], v3[0]), Me::min(v1[1], v2[1], v3[1]), Me::min(v1[2], v2[2], v3[2]));
+	int xleft = (std::max)(0, int((downCorner[0] - origin[0]) / spacing) - 1);
+	int xright = (std::min)(N[0], int((upCorner[0] - origin[0]) / spacing) + 3);
+	int yleft = (std::max)(0, int((downCorner[1] - origin[1]) / spacing) - 1);
+	int yright = (std::min)(N[1], int((upCorner[1] - origin[1]) / spacing) + 3);
+	int zleft = (std::max)(0, int((downCorner[2] - origin[2]) / spacing) - 1);
+	int zright = (std::min)(N[2], int((upCorner[2] - origin[2]) / spacing) + 3);
+	for (int kx = xleft; kx < xright; kx++) {
+		for (int ky = yleft; ky < yright; ky++) {
+			for (int kz = zleft; kz < zright; kz++) {
+				Point pos(kx * spacing + origin[0], ky * spacing + origin[1], kz * spacing + origin[2]);
+				auto sqrdist = CGAL::squared_distance(pos, tri);
+				if (sqrdist < 3 * spacing * spacing) local_close.insert({ kx,ky,kz });
+			}
+		}
+	}
+	for (auto it = local_close.begin(); it != local_close.end(); it++) {
+		boundary_indices.push_back(*it);
+	}
+#endif
+}
+
+void HierarchyGrid::generate_signed_dist_field(std::vector<float>& dst, float spacing, int Nodes[3], float inside_offset, float box[2][3])
+{
+	std::vector<std::array<int, 3>> boundary_indices;
+	std::vector<float> boundary_distance;
+	auto grid_spacing = std::array<float, 3>{ {spacing, spacing, spacing}};
+	auto uniform_speed = 1.f;
+
+	float origin[3] = { box[0][0], box[0][1], box[0][2] };
+	//if (origin == nullptr) {
+	//	origin = xmin.data();
+	//}
+	std::array<float, 3> xm = { origin[0],origin[1], origin[2] };
+	std::array<float, 3> xM = { Nodes[0] * spacing + origin[0],Nodes[1] * spacing + origin[1],Nodes[2] * spacing + origin[2] };
+	for (auto fh : omesh.faces()) {
+		auto itv = omesh.fv_begin(fh);
+		double* doublev1 = omesh.point(*itv++).data();
+		double* doublev2 = omesh.point(*itv++).data();
+		double* doublev3 = omesh.point(*itv).data();
+		float* floatv1 = reinterpret_cast<float*>(doublev1);
+		float* floatv2 = reinterpret_cast<float*>(doublev2);
+		float* floatv3 = reinterpret_cast<float*>(doublev3);
+		vec3 v1 = vec3::Map(floatv1);
+		vec3 v2 = vec3::Map(floatv2);
+		vec3 v3 = vec3::Map(floatv3);
+		//vec3 v1 = vec3::Map(omesh.point(*itv++).data());
+		//vec3 v2 = vec3::Map(omesh.point(*itv++).data());
+		//vec3 v3 = vec3::Map(omesh.point(*itv).data());
+		_find_grid_node_close_to_face(v1, v2, v3, spacing, Nodes,
+			boundary_indices, boundary_distance, box);
+	}
+	std::map<std::array<int, 3>, float> id2dist;
+
+	// delete duplicated element
+	auto end_iter = std::unique(boundary_indices.begin(), boundary_indices.end());
+	boundary_indices.erase(end_iter, boundary_indices.end());
+	boundary_distance.resize(boundary_indices.size());
+#pragma omp parallel for
+	for (int i = 0; i < boundary_indices.size(); i++) {
+		Point p(boundary_indices[i][0] * spacing + origin[0], boundary_indices[i][1] * spacing + origin[1], boundary_indices[i][2] * spacing + origin[2]);
+		auto close_one = aabb_tree.closest_point_and_primitive(p);
+		auto tri_itr = close_one.second;
+		auto p_proj = close_one.first;
+		Kernel::Vector_3 pp(p[0] - p_proj[0], p[1] - p_proj[1], p[2] - p_proj[2]);
+		auto sqrdist = pp.squared_length();
+		auto tri_normal = tri_itr->supporting_plane().orthogonal_vector();
+		auto product = tri_normal * Kernel::Vector_3(p[0] - p_proj[0], p[1] - p_proj[1], p[2] - p_proj[2]);
+		if (product > 0)
+			boundary_distance[i] = sqrt(sqrdist);
+		else if (product < 0)
+			boundary_distance[i] = -sqrt(sqrdist);
+		else {
+			boundary_distance[i] = 0;
+		}
+		boundary_distance[i] += inside_offset;
+	}
+	auto boundary_times = boundary_distance;
+
+	//namespace fmm = thinks::fast_marching_method;
+	std::array<size_t, 3> grid_size{ Nodes[0], Nodes[1], Nodes[2] };
+}
+
+void HierarchyGrid::compute_nodes_in_model(std::vector<int>& flags, float spacing, int Nodes[3], float box[2][3])
+{
+	float origin[3] = { box[0][0], box[0][1], box[0][2] };
+	std::vector<Scaler> grid_values;
+
+#ifndef   DETERMINE_NODES_IN_MODEL_WITH_RAY_CASTING
+	grid_values.clear();
+	std::vector<Scaler>().swap(grid_values);
+	//generate_signed_dist_field(grid_values, spacing, Nodes, box);
+	flags.resize((grid_values.size() + 31) / 32, 0);
+	std::cout << "test 3: " << grid_values.size() << std::endl;
+
+#pragma omp parallel for
+	for (int i = 0; i < flags.size(); i++) {
+		int fdw = flags[i];
+		for (int j = 0; j < 32; j++) {
+			int node_id = i * 32 + j;
+			if (node_id >= grid_values.size()) break;
+			//if (grid_values[node_id] < -shell_length) set_bit(fdw, j);
+			// Mark
+			if (grid_values[node_id] < 0) set_bit(fdw, j);
+		}
+		flags[i] = fdw;
+	}
+#else
+	Point pfar(1e4, 1e4, 1e4);
+	Point pfarop(-1e4, -1e4, -1e4);
+	int nodes_num = Nodes[0] * Nodes[1] * Nodes[2];
+	flags.resize((nodes_num + 31) / 32, 0);
+#pragma omp parallel for
+	for (int i = 0; i < nodes_num; i++) {
+		int xcoord = i % Nodes[0];
+		int ycoord = (i / Nodes[0]) % Nodes[1];
+		int zcoord = i / (Nodes[0] * Nodes[1]);
+		Point p(xcoord * spacing + origin[0], ycoord * spacing + origin[1], zcoord * spacing + origin[2]);
+		Segm ray(p, pfar);
+		int nIntersect = aabb_tree.number_of_intersected_primitives(ray);
+		int nIntersectOp = aabb_tree.number_of_intersected_primitives(Segm(p, pfarop));
+		if (!(nIntersect % 2 == 0 || nIntersectOp % 2 == 0)) {
+			set_bit(flags.data(), i);
+		}
+	}
+#endif
+}
+
 void HierarchyGrid::testShell(void)
 {
 	_gridlayer[0]->init_rho(0);
@@ -326,12 +666,13 @@ void grid::HierarchyGrid::enable_logs(int flag)
 	_logFlag = flag;
 }
 
-void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const std::vector<int>& facevertices)
+// MAEK[USED]
+void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const std::vector<int>& facevertices, Mesh& inputmesh)
 {
 	//_pcoords = pcoords;
 	//_trifaces = facevertices;
 
-	buildAABBTree(pcoords, facevertices);
+	buildAABBTree(pcoords, facevertices, inputmesh);
 
 	//for (int i = 0; i < facevertices.size(); i++) std::cout << facevertices[i] << std::endl;
 
@@ -343,7 +684,7 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 	auto voxInfo = voxelize_mesh(pcoords, facevertices, _setting.prefer_reso, solid_bit, out_reso, out_box);
 	//write_obj_cubes(solid_bit.data(), voxInfo, "voxels.obj");
 
-#if 0
+#if 1
 #ifdef ENABLE_MATLAB
 	Eigen::Matrix<int, -1, 1> solid_bit_(solid_bit.size(), 1);
 	for (int i = 0; i < solid_bit.size(); i++)
@@ -358,7 +699,7 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 	// The bits in a word are listed starting from high order in voxelizer, so we reverse the bits in all words 
 	wordReverse_g(solid_bit.size(), solid_bit.data());
 
-#if 0
+#if 1
 #ifdef ENABLE_MATLAB
 	Eigen::Matrix<int, -1, 1> solid_bit2(solid_bit.size(), 1);
 	for (int i = 0; i < solid_bit.size(); i++)
@@ -432,7 +773,6 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 	std::vector<int> v2vfinec[64];
 	int* v2vfineclist[64];
 
-
 	// generate topology between elements and vertices
 	for (int i = 0; i < elesatlist.size(); i++) {
 		std::vector<unsigned int>& ebit = elesatlist[i]._bitArray;
@@ -472,6 +812,8 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 		Grid::setVerticesPosFlag(vertexreso, vrtsat, vbitflag.data());
 
 		// set elements bit flags
+		Grid::setElementsPosFlag(elementreso, elesat, ebitflag.data());
+		// MARK[OR]
 		for (int j = 0; j < ebit.size(); j++) {
 			
 		}
@@ -1520,12 +1862,18 @@ void grid::cubeGridSetSolidVertices(int reso, const std::vector<unsigned int>& s
 		int loc[3] = { j % 2,(j % 4) / 2,j / 4 };
 #pragma omp parallel for
 		for (int i = 0; i < nelements; i++) {
-			int eloc[3] = { i % reso ,(i / reso) % reso,i / reso2 };
-			int vloc[3] = { eloc[0] + loc[0],eloc[1] + loc[1],eloc[2] + loc[2] };
-			int vid = vloc[0] + vloc[1] * vreso + vloc[2] * vreso2;
-#pragma omp critical
+			// MARK[TODO] add solid_ebit selection of i
+			// read(solid_ebit.data(), i)
+			// may return 1 --> in the model
+			if (read_bit(solid_ebit.data(), i))
 			{
-				set_bit(solid_vbit.data(), vid);
+				int eloc[3] = { i % reso ,(i / reso) % reso,i / reso2 };
+				int vloc[3] = { eloc[0] + loc[0],eloc[1] + loc[1],eloc[2] + loc[2] };
+				int vid = vloc[0] + vloc[1] * vreso + vloc[2] * vreso2;
+#pragma omp critical
+				{
+					set_bit(solid_vbit.data(), vid);
+				}
 			}
 		}
 	}
@@ -1859,7 +2207,34 @@ void Grid::setVerticesPosFlag(int vreso, BitSAT<unsigned int>& vrtsat, int* flag
 			flags[vid] = flagword;
 		}
 	}
+}
 
+void Grid::setElementsPosFlag(int ereso, BitSAT<unsigned int>& elesat, int* flags)
+{
+	auto& ebit = elesat._bitArray;
+	int ereso2 = ereso * ereso;
+	for (int j = 0; j < ebit.size(); j++)
+	{
+		auto word = ebit[j];
+		if (word == 0) continue;
+		for (int ji = 0; ji < BitCount<unsigned int>::value; ji++)
+		{
+			if (!read_bit(word, ji)) continue;
+			int ebitid = j * BitCount<unsigned int>::value + ji;
+			int flagword = 0;
+
+			// position mod 8 flag
+			int epos[3] = { ebitid * ereso, ebitid / ereso % ereso, ebitid / ereso2 };
+			flagword |= epos[0] % 8;
+			flagword |= (epos[1] % 8) << 3;
+			flagword |= (epos[2] % 8) << 6;
+
+			int eid = elesat[ebitid];
+
+			// write flag word to memory 
+			flags[eid] = flagword;
+		}
+	}
 }
 
 void Grid::setV2E(int vreso, BitSAT<unsigned int>& vrtsat, BitSAT<unsigned int>& elsat, int* v2elist[8])
@@ -2573,6 +2948,22 @@ void Grid::v3_toMatlab(const std::string& nam, double* v[3])
 #endif
 }
 
+void::Grid::pass_spline_surf_node2matlab(void)
+{
+	Eigen::Matrix<float, -1, 1> node_x;
+	Eigen::Matrix<float, -1, 1> node_y;
+	Eigen::Matrix<float, -1, 1> node_z;
+	node_x.resize(spline_surface_node->size(), 1);
+	node_y.resize(spline_surface_node->size(), 1);
+	node_z.resize(spline_surface_node->size(), 1);
+	std::copy(spline_surface_node[0].begin(), spline_surface_node[0].end(), node_x.begin());
+	std::copy(spline_surface_node[1].begin(), spline_surface_node[1].end(), node_y.begin());
+	std::copy(spline_surface_node[2].begin(), spline_surface_node[2].end(), node_z.begin());
+	eigen2ConnectedMatlab("mc_spline_node_x", node_x);
+	eigen2ConnectedMatlab("mc_spline_node_y", node_y);
+	eigen2ConnectedMatlab("mc_spline_node_z", node_z);
+}
+
 void Grid::generate_surface_nodes_by_MC(const std::string& fileName, int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3], std::vector<float> mcPoints_in)
 {
 	MCImplicitRender* mc_render;
@@ -2597,16 +2988,222 @@ void Grid::generate_surface_nodes_by_MC(const std::string& fileName, int Nodes[3
 
 	mc_render->RunMarchingCubesTestPotential(minValue, bg_node, mcPoints_in);
 	mc_render->save_to_surface_node(surface_node_x, surface_node_y, surface_node_z);
-	//mc_render->InnerTransferToOpenMesh(surface_node_x, surface_node_y, surface_node_z);
-	//mc_render->TransferToOpenMesh();
-	//mc_render->SavePoints(output_filename);
+}
 
-	//ptr_mesh_->SaveFile("./output/isosurface.obj");
+std::vector<int> generateEquidistantIntegers(int range, int num_sample) {
+	std::vector<int> points;
+
+	if (num_sample >= range) {
+		std::cerr << "Error: Number of points to generate (m) must be less than N." << std::endl;
+		return points;
+	}
+
+	double step = static_cast<double>(range) / (num_sample - 1);
+
+	for (int i = 0; i < num_sample; ++i) {
+		int point = static_cast<int>(i * step);
+		points.push_back(point);
+	}
+
+	return points;
 }
 
 void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3])
 {
+//#ifdef  ENABLE_MATLAB
+//	Eigen::Matrix<float, -1, 1> surf_x3, surf_y3, surf_z3;
+//	surf_x3.resize(surface_node_x.size());
+//	surf_y3.resize(surface_node_y.size());
+//	surf_z3.resize(surface_node_z.size());
+//	memcpy(surf_x3.data(), surface_node_x.data(), sizeof(float) * surface_node_x.size());
+//	memcpy(surf_y3.data(), surface_node_y.data(), sizeof(float) * surface_node_y.size());
+//	memcpy(surf_z3.data(), surface_node_z.data(), sizeof(float) * surface_node_z.size());
+//	eigen2ConnectedMatlab("surf_x3", surf_x3);
+//	eigen2ConnectedMatlab("surf_y3", surf_y3);
+//	eigen2ConnectedMatlab("surf_z3", surf_z3);
+//#endif
 
+	std::vector<float> tmp_x;
+	std::vector<float> tmp_y;
+	std::vector<float> tmp_z;
+	std::vector<float> vert_final[3];
+	std::vector<float> reduced_surf_nodes[3];
+	const unsigned int num = surface_node_x.size();
+	const unsigned int num_surface_points = 100000;
+	float smallmove = 1e-3f;
+	std::vector<Point> init_surface_nodes;
+	std::vector<Point> closest_points_set;
+	init_surface_nodes.reserve(num);
+	closest_points_set.reserve(num);
+	for (int i = 0; i < 3; i++)
+	{
+		reduced_surf_nodes[i].reserve(num_surface_points * 3);
+	}
+
+	int count_interior = 0;
+
+	if (num / num_surface_points > 2)
+	{
+#if 1  // random picking
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_int_distribution<> dis(0, num - 1);
+		std::set<int> generated_numbers;
+
+		while (generated_numbers.size() < num_surface_points * 3) {
+			int random_number = dis(gen);
+			if (generated_numbers.find(random_number) == generated_numbers.end()) {
+				generated_numbers.insert(random_number);
+				reduced_surf_nodes[0].push_back(surface_node_x[random_number]);
+				reduced_surf_nodes[1].push_back(surface_node_y[random_number]);
+				reduced_surf_nodes[2].push_back(surface_node_z[random_number]);
+			}
+		}
+#else  // equal distance picking
+		std::vector<int> equidistantIntegers = generateEquidistantIntegers(num, num_surface_points * 3);
+		for (int j = 0; j < num_surface_points; j++)
+		{
+			// TODO[UPDATE COPY]
+			reduced_surf_nodes[0].push_back(surface_node_x[equidistantIntegers[j]]);
+			reduced_surf_nodes[1].push_back(surface_node_y[equidistantIntegers[j]]);
+			reduced_surf_nodes[2].push_back(surface_node_z[equidistantIntegers[j]]);
+		}
+#endif
+	}
+	else
+	{
+		for (int j = 0; j < surface_node_x.size(); j++)
+		{
+			// TODO[UPDATE COPY]
+			reduced_surf_nodes[0].push_back(surface_node_x[j]);
+			reduced_surf_nodes[1].push_back(surface_node_y[j]);
+			reduced_surf_nodes[2].push_back(surface_node_z[j]);
+		}
+	}
+//#ifdef  ENABLE_MATLAB
+//	Eigen::Matrix<float, -1, 1> surf_x1, surf_y1, surf_z1;
+//	surf_x1.resize(reduced_surf_nodes[0].size());
+//	surf_y1.resize(reduced_surf_nodes[0].size());
+//	surf_z1.resize(reduced_surf_nodes[0].size());
+//	memcpy(surf_x1.data(), reduced_surf_nodes[0].data(), sizeof(float) * reduced_surf_nodes[0].size());
+//	memcpy(surf_y1.data(), reduced_surf_nodes[1].data(), sizeof(float) * reduced_surf_nodes[1].size());
+//	memcpy(surf_z1.data(), reduced_surf_nodes[2].data(), sizeof(float) * reduced_surf_nodes[2].size());
+//	eigen2ConnectedMatlab("surf_x1", surf_x1);
+//	eigen2ConnectedMatlab("surf_y1", surf_y1);
+//	eigen2ConnectedMatlab("surf_z1", surf_z1);
+//#endif
+
+#pragma omp parallel for
+	for (int i = 0; i < reduced_surf_nodes->size(); i++)
+	{
+		Point current_point(reduced_surf_nodes[0][i], reduced_surf_nodes[1][i], reduced_surf_nodes[2][i]);
+		init_surface_nodes.push_back(current_point);
+
+		Point current_closest = aabb_tree.closest_point(current_point);
+		closest_points_set.push_back(current_closest);
+
+		Point move_direction(current_point[0] - current_closest[0], current_point[1] - current_closest[1], current_point[2] - current_closest[2]);
+		Point move_length(smallmove * move_direction[0], smallmove * move_direction[1], smallmove * move_direction[2]);
+		Point near_closest(current_closest[0] + move_length[0], current_closest[1] + move_length[1], current_closest[2] * move_length[2]);
+
+		Ray ray1(near_closest, current_point);  // point out of the model
+		Ray ray2(current_point, near_closest);  // point in the model
+
+#pragma omp critical
+		if (aabb_tree.do_intersect(ray1))
+		{
+			tmp_x.push_back(reduced_surf_nodes[0][i]);
+			tmp_y.push_back(reduced_surf_nodes[1][i]);
+			tmp_z.push_back(reduced_surf_nodes[2][i]);
+			count_interior++;
+		}
+	}
+
+	std::cout << "--[TEST] surface points in model: " << count_interior << std::endl;
+
+#ifdef  ENABLE_MATLAB
+	Eigen::Matrix<float, -1, 1> surf_x2, surf_y2, surf_z2;
+	surf_x2.resize(tmp_x.size());
+	surf_y2.resize(tmp_y.size());
+	surf_z2.resize(tmp_z.size());
+	memcpy(surf_x2.data(), tmp_x.data(), sizeof(float) * tmp_x.size());
+	memcpy(surf_y2.data(), tmp_y.data(), sizeof(float) * tmp_y.size());
+	memcpy(surf_z2.data(), tmp_z.data(), sizeof(float) * tmp_z.size());
+	eigen2ConnectedMatlab("surf_x2", surf_x2);
+	eigen2ConnectedMatlab("surf_y2", surf_y2);
+	eigen2ConnectedMatlab("surf_z2", surf_z2);
+#endif
+
+	if (tmp_x.size() == 0)                   // no marching cube point
+	{
+		for (int index = 0; index < num_surface_points; ++index)
+		{
+			vert_final[0].push_back(0);
+			vert_final[1].push_back(0);
+			vert_final[2].push_back(0);
+		}
+	}
+	else if (tmp_x.size() < num_surface_points)  // marching cube points less than sample points
+	{
+		for (int index = 0; index < tmp_x.size(); ++index)
+		{
+			vert_final[0].push_back(tmp_x[index]);
+			vert_final[1].push_back(tmp_y[index]);
+			vert_final[2].push_back(tmp_z[index]);
+		}
+		for (int index = tmp_x.size(); index < num_surface_points; ++index)
+		{
+			vert_final[0].push_back(tmp_x[0]);
+			vert_final[1].push_back(tmp_y[0]);
+			vert_final[2].push_back(tmp_z[0]);
+		}
+	}
+	else
+	{
+		for (int j = 0; j < num_surface_points; ++j)
+		{
+
+			std::random_device rd;
+			std::mt19937 gen(rd());
+			std::uniform_int_distribution<> dis(0, tmp_x.size() - 1);
+			std::set<int> generated_numbers;
+
+			while (generated_numbers.size() < num_surface_points) {
+				int random_number = dis(gen);
+				if (generated_numbers.find(random_number) == generated_numbers.end()) {
+					generated_numbers.insert(random_number);
+					vert_final[0].push_back(tmp_x[random_number]);
+					vert_final[1].push_back(tmp_y[random_number]);
+					vert_final[2].push_back(tmp_z[random_number]);
+				}
+			}
+		}
+	}
+
+	surface_node_x = vert_final[0];
+	surface_node_y = vert_final[1];
+	surface_node_z = vert_final[2];
+
+#ifdef  ENABLE_MATLAB
+	Eigen::Matrix<float, -1, 1> surf_x, surf_y, surf_z;
+	surf_x.resize(surface_node_x.size());
+	surf_y.resize(surface_node_y.size());
+	surf_z.resize(surface_node_z.size());
+	memcpy(surf_x.data(), surface_node_x.data(), sizeof(float)* surface_node_x.size());
+	memcpy(surf_y.data(), surface_node_y.data(), sizeof(float)* surface_node_y.size());
+	memcpy(surf_z.data(), surface_node_z.data(), sizeof(float)* surface_node_z.size());
+	eigen2ConnectedMatlab("surf_x", surf_x);
+	eigen2ConnectedMatlab("surf_y", surf_y);
+	eigen2ConnectedMatlab("surf_z", surf_z);
+#endif
+			
+	std::vector<float>().swap(tmp_x);
+	std::vector<float>().swap(tmp_y);
+	std::vector<float>().swap(tmp_z);
+	for (int i = 0; i < 3; i++)
+	{
+		std::vector<float>().swap(vert_final[i]);
+	}
 }
 
 
@@ -2616,13 +3213,14 @@ void Grid::generate_spline_surface_nodes(void)
 	std::vector<float> bgnodex;
 	std::vector<float> bgnodey;
 	std::vector<float> bgnodez;
-	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val);
+	int cur_ereso = _ereso / 2;
+	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val, cur_ereso);
 
 	std::vector<float> bgnode[3];
 	bgnode[0].insert(bgnode[0].end(), bgnodex.begin(), bgnodex.end());
 	bgnode[1].insert(bgnode[1].end(), bgnodey.begin(), bgnodey.end());
 	bgnode[2].insert(bgnode[2].end(), bgnodez.begin(), bgnodez.end());
-	int ereso3 = _ereso * _ereso * _ereso;
+	int ereso3 = cur_ereso * cur_ereso * cur_ereso;
 #ifdef ENABLE_MATLAB
 	Eigen::Matrix<float, -1, 1> node_value;
 	node_value.resize(ereso3, 1);
@@ -2630,12 +3228,15 @@ void Grid::generate_spline_surface_nodes(void)
 	eigen2ConnectedMatlab("rhomc1", node_value);
 #endif
 
-	int N[3] = { _ereso, _ereso, _ereso };
+	int N[3] = { cur_ereso, cur_ereso, cur_ereso };
 	// MARK[TODO] use mc to generate surface nodes
 	generate_surface_nodes_by_MC(_meshfile, N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode, mcPoints_val);
+	std::cout << "spline surface node number (after marching cube): " << spline_surface_node->size() << std::endl;
+	pass_spline_surf_node2matlab();
 
 	//
 	compute_surface_nodes_in_model(N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode);
+	std::cout << "spline surface node number (in model): " << spline_surface_node->size() << std::endl;
 }
 
 

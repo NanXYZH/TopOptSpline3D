@@ -1,5 +1,6 @@
 #include "optimization.h"
 #include "projection.h"
+#include "MeshDefinition.h"
 
 using namespace grid;
 
@@ -40,6 +41,7 @@ int ex_main() {
   std::string path="sphere.obj";
   std::vector<float> pcoords=readVertices3D(path);
   std::vector<int> facevertices=readTriangles(path);
+  Mesh omesh;
   for(int i=0; i<(int)pcoords.size(); i+=3) {
     pcoords[i+1]*=0.5;
     pcoords[i+2]*=0.25;
@@ -56,7 +58,7 @@ int ex_main() {
 
   grids.setMode(with_support_free_force);
 
-  buildGrids(pcoords,facevertices);
+  buildGrids(pcoords,facevertices, omesh);
 
   setForceSupport(getPreloadForce(), grids[0]->getForce());
 

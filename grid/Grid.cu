@@ -3585,7 +3585,7 @@ void HierarchyGrid::lambdatest(void)
 //	}
 //}
 
-void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value)
+void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso)
 {
 	if (_layer != 0) return;
 
@@ -3596,9 +3596,9 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 	float* knotz_ = _gbuf.KnotSer[2];
 	float* rholist = _gbuf.rho_e;
 
-	int ereso = _ereso;
-	int vreso = _ereso + 1;
-	float eh = elementLength();
+	int ereso = mc_ereso;
+	int vreso = ereso + 1;
+	float eh = (_box[1][0] - _box[0][0]) / mc_ereso;
 	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
 	float min_Density = _min_density;
 
@@ -4003,7 +4003,9 @@ void grid::cubeGridSetSolidVertices_g(int reso, const std::vector<unsigned int>&
 	cudaMemcpy(solid_vbit.data(), g_vbits, sizeof(unsigned int) * n_vword, cudaMemcpyDeviceToHost);
 
 	cudaFree(g_ebits);
+	g_ebits = nullptr;
 	cudaFree(g_vbits);
+	g_vbits = nullptr;
 }
 
 __global__ void setSolidElementFromFineGrid_kernel(int finereso, const unsigned int* ebitsfine, unsigned int* ebitscoarse) {

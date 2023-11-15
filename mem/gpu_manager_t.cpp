@@ -18,7 +18,6 @@ void* gpu_manager_t::add_buf(size_t size, const void* src /*= nullptr*/)
 }
 
 
-
 size_t gpu_manager_t::size(void)
 {
 	size_t total_size = 0;

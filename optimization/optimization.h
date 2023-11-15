@@ -6,6 +6,8 @@
 
 #include "Grid.h"
 #include <filesystem>
+#include "MeshDefinition.h"
+//#include "CGALDefinition.h"
 
 extern grid::HierarchyGrid grids;
 
@@ -32,7 +34,7 @@ extern Parameter params;
 
 extern gpu_manager_t gpu_manager;
 
-void buildGrids(const std::vector<float>& coords, const std::vector<int>& trifaces);
+void buildGrids(const std::vector<float>& coords, const std::vector<int>& trifaces, Mesh& inputmesh);
 
 void logParams(std::string file, std::string version_str, int argc, char** argv);
 
@@ -50,6 +52,8 @@ void setWorkMode(const std::string& modestr);
 void setDEBUG(bool debug = false);
 
 double solveAdjointSystem(void);
+
+void cgalTest(void);
 
 void selfTest(void);
 

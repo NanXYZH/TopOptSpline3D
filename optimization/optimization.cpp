@@ -12,13 +12,13 @@ grid::HierarchyGrid grids(gpu_manager);
 
 Parameter params;
 
-void buildGrids(const std::vector<float>& coords, const std::vector<int>& trifaces) 
+void buildGrids(const std::vector<float>& coords, const std::vector<int>& trifaces, Mesh& inputmesh) 
 {
 	//grids.lambdatest();
 
 	grids.set_prefer_reso(params.gridreso);
 	grids.set_skip_layer(true);
-	grids.genFromMesh(coords, trifaces);
+	grids.genFromMesh(coords, trifaces, inputmesh);
 }
 
 void logParams(std::string file, std::string version_str, int argc, char** argv)
@@ -763,4 +763,8 @@ void test_rigid_displacement(void) {
 			printf("-- u_rigid %d res = %lf\n", i, grids[0]->residual());
 		}
 	}
+}
+
+void cgalTest(void) {
+	grids.cgalTest();
 }

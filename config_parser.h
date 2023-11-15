@@ -13,6 +13,8 @@
 
 #include "gflags/gflags.h"
 
+#include "MeshDefinition.h"
+
 
 
 DECLARE_string(jsonfile);
@@ -85,6 +87,7 @@ struct config_parser_t {
 
 	std::vector<float> mesh_vertices;
 	std::vector<int> mesh_faces;
+	Mesh mesh_;
 
 	int logflag = 0;
 
@@ -92,7 +95,7 @@ struct config_parser_t {
 
 	void parse_benchmark_configuration(const std::string& filename);
 
-	void readMesh(const std::string& meshfile, std::vector<float>& coords, std::vector<int>& trfaces);
+	void readMesh(const std::string& meshfile, std::vector<float>& coords, std::vector<int>& trfaces, Mesh& inputmesh);
 };
 
 

@@ -448,10 +448,12 @@ void config_parser_t::parse_benchmark_configuration(const std::string& filename)
 	}
 }
 
-void config_parser_t::readMesh(const std::string& meshfile, std::vector<float>& coords, std::vector<int>& trfaces)
+void config_parser_t::readMesh(const std::string& meshfile, std::vector<float>& coords, std::vector<int>& trfaces, Mesh& inputmesh)
 {
 	Mesh m;
 	OpenMesh::IO::read_mesh(m, meshfile);
+
+	inputmesh = m;
 
 	coords.resize(m.n_vertices() * 3);
 	trfaces.resize(m.n_faces() * 3);
@@ -514,6 +516,6 @@ void config_parser_t::parse(int argc, char** argv)
 	inLoadArea = loadArea.generate();
 	inFixArea = fixArea.generate();
 	loadField = force_field.generate();
- 	readMesh(FLAGS_meshfile, mesh_vertices, mesh_faces);
+ 	readMesh(FLAGS_meshfile, mesh_vertices, mesh_faces, mesh_);
 }
 

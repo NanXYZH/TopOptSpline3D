@@ -3,6 +3,7 @@
 #ifndef GRID_H
 #define GRID_H
 
+//#include "fast_marching_method.hpp"
 #include "voxelizer.h"
 
 #include "string"
@@ -12,6 +13,8 @@
 #include "snippet.h"
 #include "set"
 #include <memory>
+
+#include "MeshDefinition.h"
 
 constexpr static int m_iM = 3;                                       // The order of implicit spline
 
@@ -139,6 +142,7 @@ namespace grid {
 
 	void cubeGridSetSolidVertices(int reso, const std::vector<unsigned int>& solid_ebit, std::vector<unsigned int>& solid_vbit);
 
+	// GPU version
 	void cubeGridSetSolidVertices_g(int reso, const std::vector<unsigned int>& solid_ebit, std::vector<unsigned int>& solid_vbit);
 
 	void setSolidElementFromFineGrid_g(int finereso, const std::vector<unsigned int>& ebits_fine, std::vector<unsigned int>& ebits_coarse);
@@ -225,6 +229,7 @@ namespace grid {
 
 	public:
 		friend class HierarchyGrid;
+				
 		std::string _name;
 		struct {
 			float* coeffs;
@@ -374,6 +379,11 @@ namespace grid {
 		void mark_surface_elements_g(int nv, int ne, int* v2e[8], int* vflag, int* eflag);
 
 		static void setVerticesPosFlag(int vreso, BitSAT<unsigned int>& vrtsat, int* flags);
+
+		static void setElementsPosFlag(int ereso, BitSAT<unsigned int>& elesat, int* flags);
+
+		// MARK[TODO] add vertex in model
+
 
 		static void setV2E(int vreso, BitSAT<unsigned int>& vrtsat, BitSAT<unsigned int>& elsat, int* v2e[8]);
 
@@ -541,7 +551,7 @@ namespace grid {
 
 		void ddensity2dcoeff_update(void);
 
-		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value);
+		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso);
 
 		double unitizeForce(void);
 
@@ -554,6 +564,8 @@ namespace grid {
 		double densityDiscretiness(void);
 
 		double compliance(double* u[3], double* f[3]);
+
+		void pass_spline_surf_node2matlab(void);
 
 		void force2matlab(const std::string& nam);
 
@@ -675,6 +687,10 @@ namespace grid {
 		int _logFlag = 0;
 
 	public:
+		typedef OpenMesh::VectorT<float, 3> Vec3x;
+		typedef float Scaler;
+		typedef Eigen::Matrix<Scaler, 3, 1> vec3;
+		typedef Eigen::Matrix<Scaler, 2, 1> vec2;
 
 		gpu_manager_t& get_gmem(void) { return *_setting.gmem; }
 
@@ -692,14 +708,25 @@ namespace grid {
 
 		bool hasSupport(void) { return _mode == with_support_constrain_force_direction || _mode == with_support_free_force; }
 
-		void buildAABBTree(const std::vector<float>& pcoords, const std::vector<int>& trifaces);
+		void cgalTest(void);
+
+		void buildAABBTree(const std::vector<float>& pcoords, const std::vector<int>& trifaces,const Mesh& inputmesh);
 
 		void setSolidShellElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags);
 
 		// MARK: to be updated
 		void setinModelVertice(const std::vector<unsigned int>& vbitfine, BitSAT<unsigned int>& esat, float box[2][3], int vreso, std::vector<int>& vflags);
+
 		// MARK: to be updated
 		void setinModelElement(const std::vector<unsigned int>& ebitfine, BitSAT<unsigned int>& esat, float box[2][3], int ereso, std::vector<int>& eflags);
+
+		void _find_grid_node_close_to_face(vec3& v1, vec3& v2, vec3& v3, float spacing, int N[3],
+			std::vector<std::array<int, 3>>& boundary_indices, std::vector<float>& boundary_distance,
+			float box[2][3]);
+
+		void generate_signed_dist_field(std::vector<float>& dst, float spacing, int Nodes[3], float inside_offset, float box[2][3]);
+
+		void compute_nodes_in_model(std::vector<int>& flags, float spacing, int Nodes[3], float box[2][3]);
 
 		void testShell(void);
 
@@ -738,7 +765,7 @@ namespace grid {
 
 		void set_skip_layer(bool isskip) { _setting.skiplayer1 = isskip; }
 
-		void genFromMesh(const std::vector<float>& pcoords, const std::vector<int>& facevertices);
+		void genFromMesh(const std::vector<float>& pcoords, const std::vector<int>& facevertices, Mesh& inputmesh);
 
 		void genFromMesh(const std::vector<unsigned int> &solid_bit, int out_reso[3]);
 
