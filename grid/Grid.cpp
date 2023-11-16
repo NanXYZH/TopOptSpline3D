@@ -3010,18 +3010,18 @@ std::vector<int> generateEquidistantIntegers(int range, int num_sample) {
 
 void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3])
 {
-//#ifdef  ENABLE_MATLAB
-//	Eigen::Matrix<float, -1, 1> surf_x3, surf_y3, surf_z3;
-//	surf_x3.resize(surface_node_x.size());
-//	surf_y3.resize(surface_node_y.size());
-//	surf_z3.resize(surface_node_z.size());
-//	memcpy(surf_x3.data(), surface_node_x.data(), sizeof(float) * surface_node_x.size());
-//	memcpy(surf_y3.data(), surface_node_y.data(), sizeof(float) * surface_node_y.size());
-//	memcpy(surf_z3.data(), surface_node_z.data(), sizeof(float) * surface_node_z.size());
-//	eigen2ConnectedMatlab("surf_x3", surf_x3);
-//	eigen2ConnectedMatlab("surf_y3", surf_y3);
-//	eigen2ConnectedMatlab("surf_z3", surf_z3);
-//#endif
+	//#ifdef  ENABLE_MATLAB
+	//	Eigen::Matrix<float, -1, 1> surf_x3, surf_y3, surf_z3;
+	//	surf_x3.resize(surface_node_x.size());
+	//	surf_y3.resize(surface_node_y.size());
+	//	surf_z3.resize(surface_node_z.size());
+	//	memcpy(surf_x3.data(), surface_node_x.data(), sizeof(float) * surface_node_x.size());
+	//	memcpy(surf_y3.data(), surface_node_y.data(), sizeof(float) * surface_node_y.size());
+	//	memcpy(surf_z3.data(), surface_node_z.data(), sizeof(float) * surface_node_z.size());
+	//	eigen2ConnectedMatlab("surf_x3", surf_x3);
+	//	eigen2ConnectedMatlab("surf_y3", surf_y3);
+	//	eigen2ConnectedMatlab("surf_z3", surf_z3);
+	//#endif
 
 	std::vector<float> tmp_x;
 	std::vector<float> tmp_y;
@@ -3044,7 +3044,7 @@ void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surf
 
 	if (num / num_surface_points > 2)
 	{
-#if 1  // random picking
+#if 0  // random picking
 		std::random_device rd;
 		std::mt19937 gen(rd());
 		std::uniform_int_distribution<> dis(0, num - 1);
@@ -3061,13 +3061,17 @@ void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surf
 		}
 #else  // equal distance picking
 		std::vector<int> equidistantIntegers = generateEquidistantIntegers(num, num_surface_points * 3);
-		for (int j = 0; j < num_surface_points; j++)
+		for (int j = 0; j < num_surface_points * 3; j++)
 		{
 			// TODO[UPDATE COPY]
 			reduced_surf_nodes[0].push_back(surface_node_x[equidistantIntegers[j]]);
 			reduced_surf_nodes[1].push_back(surface_node_y[equidistantIntegers[j]]);
 			reduced_surf_nodes[2].push_back(surface_node_z[equidistantIntegers[j]]);
 		}
+		Eigen::Matrix<int, -1, 1> random_list;
+		random_list.resize(num_surface_points * 3);
+		memcpy(random_list.data(), equidistantIntegers.data(), sizeof(int) * num_surface_points * 3);
+		eigen2ConnectedMatlab("step_list1", random_list);
 #endif
 	}
 	else
@@ -3080,18 +3084,18 @@ void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surf
 			reduced_surf_nodes[2].push_back(surface_node_z[j]);
 		}
 	}
-//#ifdef  ENABLE_MATLAB
-//	Eigen::Matrix<float, -1, 1> surf_x1, surf_y1, surf_z1;
-//	surf_x1.resize(reduced_surf_nodes[0].size());
-//	surf_y1.resize(reduced_surf_nodes[0].size());
-//	surf_z1.resize(reduced_surf_nodes[0].size());
-//	memcpy(surf_x1.data(), reduced_surf_nodes[0].data(), sizeof(float) * reduced_surf_nodes[0].size());
-//	memcpy(surf_y1.data(), reduced_surf_nodes[1].data(), sizeof(float) * reduced_surf_nodes[1].size());
-//	memcpy(surf_z1.data(), reduced_surf_nodes[2].data(), sizeof(float) * reduced_surf_nodes[2].size());
-//	eigen2ConnectedMatlab("surf_x1", surf_x1);
-//	eigen2ConnectedMatlab("surf_y1", surf_y1);
-//	eigen2ConnectedMatlab("surf_z1", surf_z1);
-//#endif
+#ifdef  ENABLE_MATLAB
+	Eigen::Matrix<float, -1, 1> surf_x1, surf_y1, surf_z1;
+	surf_x1.resize(reduced_surf_nodes[0].size());
+	surf_y1.resize(reduced_surf_nodes[0].size());
+	surf_z1.resize(reduced_surf_nodes[0].size());
+	memcpy(surf_x1.data(), reduced_surf_nodes[0].data(), sizeof(float) * reduced_surf_nodes[0].size());
+	memcpy(surf_y1.data(), reduced_surf_nodes[1].data(), sizeof(float) * reduced_surf_nodes[1].size());
+	memcpy(surf_z1.data(), reduced_surf_nodes[2].data(), sizeof(float) * reduced_surf_nodes[2].size());
+	eigen2ConnectedMatlab("surf_x1", surf_x1);
+	eigen2ConnectedMatlab("surf_y1", surf_y1);
+	eigen2ConnectedMatlab("surf_z1", surf_z1);
+#endif
 
 #pragma omp parallel for
 	for (int i = 0; i < reduced_surf_nodes->size(); i++)
@@ -3160,9 +3164,9 @@ void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surf
 	}
 	else
 	{
+#if 0
 		for (int j = 0; j < num_surface_points; ++j)
 		{
-
 			std::random_device rd;
 			std::mt19937 gen(rd());
 			std::uniform_int_distribution<> dis(0, tmp_x.size() - 1);
@@ -3179,33 +3183,46 @@ void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surf
 			}
 		}
 	}
-
-	surface_node_x = vert_final[0];
-	surface_node_y = vert_final[1];
-	surface_node_z = vert_final[2];
+#else  // equal distance picking
+		std::vector<int> equidistantIntegers = generateEquidistantIntegers(tmp_x.size(), num_surface_points);
+		for (int j = 0; j < num_surface_points; j++)
+		{
+			// TODO[UPDATE COPY]
+			vert_final[0].push_back(tmp_x[equidistantIntegers[j]]);
+			vert_final[1].push_back(tmp_y[equidistantIntegers[j]]);
+			vert_final[2].push_back(tmp_z[equidistantIntegers[j]]);
+		}
+		Eigen::Matrix<int, -1, 1> random_list;
+		random_list.resize(num_surface_points);
+		memcpy(random_list.data(), equidistantIntegers.data(), sizeof(int) * num_surface_points);
+		eigen2ConnectedMatlab("step_list2", random_list);
+#endif
+		surface_node_x = vert_final[0];
+		surface_node_y = vert_final[1];
+		surface_node_z = vert_final[2];
 
 #ifdef  ENABLE_MATLAB
-	Eigen::Matrix<float, -1, 1> surf_x, surf_y, surf_z;
-	surf_x.resize(surface_node_x.size());
-	surf_y.resize(surface_node_y.size());
-	surf_z.resize(surface_node_z.size());
-	memcpy(surf_x.data(), surface_node_x.data(), sizeof(float)* surface_node_x.size());
-	memcpy(surf_y.data(), surface_node_y.data(), sizeof(float)* surface_node_y.size());
-	memcpy(surf_z.data(), surface_node_z.data(), sizeof(float)* surface_node_z.size());
-	eigen2ConnectedMatlab("surf_x", surf_x);
-	eigen2ConnectedMatlab("surf_y", surf_y);
-	eigen2ConnectedMatlab("surf_z", surf_z);
+		Eigen::Matrix<float, -1, 1> surf_x, surf_y, surf_z;
+		surf_x.resize(surface_node_x.size());
+		surf_y.resize(surface_node_y.size());
+		surf_z.resize(surface_node_z.size());
+		memcpy(surf_x.data(), surface_node_x.data(), sizeof(float) * surface_node_x.size());
+		memcpy(surf_y.data(), surface_node_y.data(), sizeof(float) * surface_node_y.size());
+		memcpy(surf_z.data(), surface_node_z.data(), sizeof(float) * surface_node_z.size());
+		eigen2ConnectedMatlab("surf_x", surf_x);
+		eigen2ConnectedMatlab("surf_y", surf_y);
+		eigen2ConnectedMatlab("surf_z", surf_z);
 #endif
-			
-	std::vector<float>().swap(tmp_x);
-	std::vector<float>().swap(tmp_y);
-	std::vector<float>().swap(tmp_z);
-	for (int i = 0; i < 3; i++)
-	{
-		std::vector<float>().swap(vert_final[i]);
+
+		std::vector<float>().swap(tmp_x);
+		std::vector<float>().swap(tmp_y);
+		std::vector<float>().swap(tmp_z);
+		for (int i = 0; i < 3; i++)
+		{
+			std::vector<float>().swap(vert_final[i]);
+		}
 	}
 }
-
 
 void Grid::generate_spline_surface_nodes(void)
 {

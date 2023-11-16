@@ -3608,6 +3608,7 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 	float* node_value;
 	int ereso3 = ereso * ereso * ereso;
 	int vreso3 = vreso * vreso * vreso;
+	float t = 0.25;
 	cudaMalloc(&node_value, sizeof(float) * ereso3);
 	init_array(node_value, float{ 0 }, ereso3);
 	cudaMalloc(&nodex, sizeof(float) * ereso3);
@@ -3666,7 +3667,8 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 		nodex[id] = pos[0];
 		nodey[id] = pos[1];
 		nodez[id] = pos[2];
-		node_value[id] = Heaviside(val) - 0.45;
+		node_value[id] = Heaviside(val - 0.45);
+		//node_value[id] = cosf(2 * M_PI * t * pos[0]) + cosf(2 * M_PI * t * pos[1]) + cosf(2 * M_PI * t * pos[2]) + 0.1; // to verify the Marching cube
 	};
 
 	traverse_noret << < grid_size, block_size >> > (ereso3, calc_node);
