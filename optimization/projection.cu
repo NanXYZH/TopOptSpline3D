@@ -365,7 +365,6 @@ void setForceSupport(double const * const fsup[3], double* f_dev[3])
 	traverse_noret << <grid_size, block_size >> > (n_loadnodes(), kernel);
 	cudaDeviceSynchronize();
 	cuda_error_check;
-
 }
 
 void cleanProjection(void)

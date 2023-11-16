@@ -49,6 +49,7 @@ __constant__ float gnBoundMax[3];
 
 __constant__ float* gpu_KnotSer[3];
 __constant__ float* gpu_cijk;
+__constant__ float* gpu_SurfacePoints[3];
 
 extern __constant__ double* gLoadtangent[2][3];
 extern __constant__ double* gLoadnormal[3];
@@ -2925,7 +2926,7 @@ void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int
 	//std::cout << "------------------------------------------------------ " << std::endl;
 }
 
-void Grid::set_spline_knot_info(void)
+void grid::Grid::set_spline_knot_infoSymbol(void)
 {
 	cudaMemcpyToSymbol(gpu_cijk, &_gbuf.coeffs, sizeof(gpu_cijk));
 	cuda_error_check;
@@ -2938,45 +2939,45 @@ void Grid::set_spline_knot_info(void)
 	cudaMemcpyToSymbol(gnBoundMax, m_3sBoundMax, sizeof(gnBoundMax));
 	cuda_error_check;
 
-#if 1
-	// update to download (OK)
-	////float penalhost[1];
-	//float stephost[3];
-	//float* Boundminhost = new float[3];
-	//float* Boundmaxhost = new float[3];
-	////cudaMemcpyFromSymbol(penalhost, power_penalty, sizeof(float));
-	//cudaMemcpyFromSymbol(stephost, gnstep, sizeof(float) * 3);
-	//cudaMemcpyFromSymbol(Boundminhost, gnBoundMin, sizeof(float) * 3);
-	//cudaMemcpyFromSymbol(Boundmaxhost, gnBoundMax, sizeof(float) * 3);
+#if 0
+	 //update to download (OK)
+	//float penalhost[1];
+	float stephost[3];
+	float* Boundminhost = new float[3];
+	float* Boundmaxhost = new float[3];
+	//cudaMemcpyFromSymbol(penalhost, power_penalty, sizeof(float));
+	cudaMemcpyFromSymbol(stephost, gnstep, sizeof(float) * 3);
+	cudaMemcpyFromSymbol(Boundminhost, gnBoundMin, sizeof(float) * 3);
+	cudaMemcpyFromSymbol(Boundmaxhost, gnBoundMax, sizeof(float) * 3);
 
-	//std::cout << "-------------- spline info --------------------------- " << std::endl;
-	////std::cout << "penal: " << penalhost[0] << std::endl;
-	//std::cout << "gnStep: " << stephost[0] << ", " << stephost[1] << ", " << stephost[2] << std::endl;
-	//std::cout << "gnBoundmin: " << Boundminhost[0] << ", " << Boundminhost[1] << ", " << Boundminhost[2] << std::endl;
-	//std::cout << "gnBoundmax: " << Boundmaxhost[0] << ", " << Boundmaxhost[1] << ", " << Boundmaxhost[2] << std::endl;
-	//delete[] Boundminhost;
-	//delete[] Boundmaxhost;
+	std::cout << "-------------- spline info --------------------------- " << std::endl;
+	//std::cout << "penal: " << penalhost[0] << std::endl;
+	std::cout << "gnStep: " << stephost[0] << ", " << stephost[1] << ", " << stephost[2] << std::endl;
+	std::cout << "gnBoundmin: " << Boundminhost[0] << ", " << Boundminhost[1] << ", " << Boundminhost[2] << std::endl;
+	std::cout << "gnBoundmax: " << Boundmaxhost[0] << ", " << Boundmaxhost[1] << ", " << Boundmaxhost[2] << std::endl;
+	delete[] Boundminhost;
+	delete[] Boundmaxhost;
 
-	//int orderhost;
-	//int* orderhost2 = new int[1];
-	//int* partitionhost = new int[3];
-	//int* basishost = new int[3];
-	//int* knotspanhost = new int[3];
-	//cudaMemcpyFromSymbol(&orderhost, gorder, sizeof(int));
-	//cudaMemcpyFromSymbol(orderhost2, gorder, sizeof(int));
-	//cudaMemcpyFromSymbol(partitionhost, gnpartition, sizeof(int) * 3);
-	//cudaMemcpyFromSymbol(basishost, gnbasis, sizeof(int) * 3);
-	//cudaMemcpyFromSymbol(knotspanhost, gnknotspan, sizeof(int) * 3);
-	//std::cout << "gnorder: " << orderhost << std::endl;
-	//std::cout << "gnorder: " << orderhost2[0] << std::endl;
-	//std::cout << "gnpartition: " << partitionhost[0] << ", " << partitionhost[1] << ", " << partitionhost[2] << std::endl;
-	//std::cout << "gnbasis: " << basishost[0] << ", " << basishost[1] << ", " << basishost[2] << std::endl;
-	//std::cout << "gnknotspan: " << knotspanhost[0] << ", " << knotspanhost[1] << ", " << knotspanhost[2] << std::endl;
-	//delete[] orderhost2;
-	//delete[] partitionhost;
-	//delete[] basishost;
-	//delete[] knotspanhost;
-	//std::cout << "------------------------------------------------------ " << std::endl;
+	int orderhost;
+	int* orderhost2 = new int[1];
+	int* partitionhost = new int[3];
+	int* basishost = new int[3];
+	int* knotspanhost = new int[3];
+	cudaMemcpyFromSymbol(&orderhost, gorder, sizeof(int));
+	cudaMemcpyFromSymbol(orderhost2, gorder, sizeof(int));
+	cudaMemcpyFromSymbol(partitionhost, gnpartition, sizeof(int) * 3);
+	cudaMemcpyFromSymbol(basishost, gnbasis, sizeof(int) * 3);
+	cudaMemcpyFromSymbol(knotspanhost, gnknotspan, sizeof(int) * 3);
+	std::cout << "gnorder: " << orderhost << std::endl;
+	std::cout << "gnorder: " << orderhost2[0] << std::endl;
+	std::cout << "gnpartition: " << partitionhost[0] << ", " << partitionhost[1] << ", " << partitionhost[2] << std::endl;
+	std::cout << "gnbasis: " << basishost[0] << ", " << basishost[1] << ", " << basishost[2] << std::endl;
+	std::cout << "gnknotspan: " << knotspanhost[0] << ", " << knotspanhost[1] << ", " << knotspanhost[2] << std::endl;
+	delete[] orderhost2;
+	delete[] partitionhost;
+	delete[] basishost;
+	delete[] knotspanhost;
+	std::cout << "------------------------------------------------------ " << std::endl;
 
 	//float* cijkhost = new float[n_cijk()];
 	//cudaMemcpyFromSymbol(cijkhost, gpu_cijk, sizeof(float) * n_cijk());
@@ -3003,6 +3004,44 @@ void Grid::set_spline_knot_info(void)
 		KnotSerhost[i] = nullptr;
 	}
 //	delete[] KnotSerhost;
+#endif
+}
+
+void grid::Grid::uploadCoeffsSymbol(void)
+{
+	cudaMemcpyToSymbol(gpu_cijk, &_gbuf.coeffs, sizeof(gpu_cijk));
+	cuda_error_check;
+
+	//float* cijkhost = new float[n_cijk()];
+	//cudaMemcpyFromSymbol(cijkhost, gpu_cijk, sizeof(float) * n_cijk());
+	//cuda_error_check;
+	//gpu_manager_t::pass_buf_to_matlab("gncijk", cijkhost, n_cijk());
+}
+
+void grid::Grid::uploadSurfacePointsSymbol(void)
+{
+	cudaMemcpyToSymbol(gpu_SurfacePoints, _gbuf.surface_points, sizeof(gpu_SurfacePoints));
+	cuda_error_check;
+
+#ifdef ENABLE_MATLAB
+	float* surfpoints_host[3];
+	for (int i = 0; i < 3; i++)
+	{
+		surfpoints_host[i] = new float[_num_surface_points];
+		cudaMemcpy(surfpoints_host[i], _gbuf.surface_points[i], sizeof(float) * _num_surface_points, cudaMemcpyDeviceToHost);
+		cuda_error_check;
+	}
+
+	gpu_manager_t::pass_buf_to_matlab("gpu_surf1_x", surfpoints_host[0], _num_surface_points);
+	gpu_manager_t::pass_buf_to_matlab("gpu_surf1_y", surfpoints_host[1], _num_surface_points);
+	gpu_manager_t::pass_buf_to_matlab("gpu_surf1_z", surfpoints_host[2], _num_surface_points);
+
+	for (int i = 0; i < 3; i++)
+	{
+		delete[] surfpoints_host[i];
+		surfpoints_host[i] = nullptr;
+	}
+	memset(surfpoints_host, 0, sizeof(surfpoints_host));
 #endif
 }
 
@@ -3601,7 +3640,8 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 	float eh = (_box[1][0] - _box[0][0]) / mc_ereso;
 	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
 	float min_Density = _min_density;
-
+	float isosurface_value = _isosurface_value; // [MARK] may update to node_value
+	
 	float* nodex;
 	float* nodey;
 	float* nodez;

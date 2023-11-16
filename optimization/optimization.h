@@ -28,6 +28,7 @@ struct Parameter {
 	int spline_order;
 	float min_cijk;
 	float max_cijk;
+	float isosurface_value;
 };
 
 extern Parameter params;

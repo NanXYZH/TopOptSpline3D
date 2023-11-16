@@ -793,7 +793,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	initCoeffs(params.volume_ratio);		
 	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
-	grids[0]->set_spline_knot_info();
+	grids[0]->set_spline_knot_infoSymbol();
 	grids[0]->coeff2density();
 	float Vgoal = params.volume_ratio;
 #elif 0	
@@ -886,7 +886,8 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	initCoeffs(params.volume_ratio);
 	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
-	grids[0]->set_spline_knot_info();
+	grids[0]->set_spline_knot_infoSymbol();
+	grids[0]->uploadCoeffsSymbol();
 	grids[0]->coeff2density();
 	float Vgoal = params.volume_ratio;
 #elif 0	
@@ -897,6 +898,8 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	float Vgoal = 1;
 #endif
 	grids[0]->generate_spline_surface_nodes();
+	grids[0]->uploadSurfacePoints();
+	grids[0]->uploadSurfacePointsSymbol();
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 
@@ -922,7 +925,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		Vc = Vgoal - params.volume_ratio;
 		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
 
-		// set spline_coeff from mma
+		// set spline_coeff from mma (cpu2gpu)
 		setCoeff(mma.get_x().data());
 
 		// update coeff 2 density
@@ -935,6 +938,12 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		// update numeric stencil after density changed
 		update_stencil();
+
+		// update surface points in CPU
+		grids[0]->generate_spline_surface_nodes();
+		// CPU 2 GPU
+		grids[0]->uploadSurfacePoints();
+
 		// solve displacement 
 		//double c = grids.solveFEM();
 		double rel_res = 1;

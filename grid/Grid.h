@@ -233,6 +233,7 @@ namespace grid {
 		std::string _name;
 		struct {
 			float* coeffs;
+			float* surface_points[3];
 			//float* de2dc;
 			float* KnotSer[3];
 			float* rho_e;
@@ -289,6 +290,7 @@ namespace grid {
 
 		float _min_coeff = 0.f;
 		float _max_coeff = 1.0f;
+		float _isosurface_value = (_min_coeff + _max_coeff) / 2;
 
 		Grid* fineGrid = nullptr;
 		Grid* coarseGrid = nullptr;
@@ -346,6 +348,8 @@ namespace grid {
 		std::function<bool(double[3])> _inLoadArea;
 		std::function<bool(double[3])> _inFixedArea;
 		std::function<Eigen::Matrix<double, 3, 1>(double[3])> _loadField;
+
+		int _num_surface_points = 1e5;
 
 		std::vector<int> _gsLoadNodes;
 
@@ -438,6 +442,8 @@ namespace grid {
 
 		double** getResidual(void) { return _gbuf.R; }
 
+		float** getSurfacePoints(void) { return _gbuf.surface_points; }
+
 		float* getRho(void) { return _gbuf.rho_e; }
 
 		float* getCoeff(void) { return _gbuf.coeffs;  }
@@ -495,7 +501,7 @@ namespace grid {
 
 		void generate_surface_nodes_by_MC(const std::string& fileName, int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3], std::vector<float> mcPoints_in);
 
-		void compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3]);
+		void compute_surface_nodes_in_model(std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z);
 
 		double compliance(void);
 
@@ -541,9 +547,15 @@ namespace grid {
 
 		// about spline
 		// MARK£ºto do
+		void uploadSurfacePoints(void);
+		
+		void uploadSurfacePointsSymbol(void);
+
+		void uploadCoeffsSymbol(void);
+
 		void set_spline_knot_series(void);
 
-		void set_spline_knot_info(void);
+		void set_spline_knot_infoSymbol(void);
 				
 		void coeff2density(void);
 
@@ -655,6 +667,7 @@ namespace grid {
 
 			float min_coeff;
 			float max_coeff;
+			float isosurface_value;
 
 		}_setting;
 
@@ -751,7 +764,10 @@ namespace grid {
 
 		void set_min_density(float min_density) { _min_density = min_density; }
 
-		void set_spline_coeff_bound(float min_coeff, float max_coeff) { _setting.min_coeff = min_coeff; _setting.max_coeff = max_coeff; }
+		void set_spline_coeff_bound(float min_coeff, float max_coeff) {
+			_setting.min_coeff = min_coeff; _setting.max_coeff = max_coeff;
+			_setting.isosurface_value = (min_coeff + max_coeff) / 2;
+		}
 
 		void set_spline_order(int sorder) { _setting.n_order = sorder;  }
 

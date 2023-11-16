@@ -53,6 +53,7 @@ void setParameters(
 	params.spline_order = spline_order;
 	params.min_cijk = min_coeff;
 	params.max_cijk = max_coeff;
+	params.isosurface_value = (min_coeff + max_coeff) / 2;
 	grids.set_min_density(min_density);
 	grids.set_spline_coeff_bound(min_coeff, max_coeff);
 	grids.set_spline_order(spline_order);

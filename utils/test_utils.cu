@@ -34,7 +34,7 @@ extern  __constant__ float gnBoundMax[3];
 
 extern  __constant__  float* gpu_KnotSer[3];
 extern  __constant__  float* gpu_cijk;
-
+extern  __constant__ float* gpu_SurfacePoints[3];
 
 void TestSuit::setDensity(float* newrho)
 {

@@ -220,13 +220,6 @@ void HierarchyGrid::buildAABBTree(const std::vector<float>& pcoords, const std::
 	aabb_tree.clear();
 	aabb_tree.rebuild(aabb_tris.begin(), aabb_tris.end());
 
-	// compute closest point and squared distance
-	Point point_query(2.0, 2.0, 2.0);
-	Point closest_point = aabb_tree.closest_point(point_query);
-	std::cerr << "closest point is: " << closest_point << std::endl;
-	FT sqd = aabb_tree.squared_distance(point_query);
-	std::cout << "squared distance: " << sqd << std::endl;
-
 	// build cgal mesh
 	std::vector<CGMesh::Vertex_index>  vidlist;
 	for (int i = 0; i < pcoords.size(); i += 3) {
@@ -2350,9 +2343,7 @@ size_t grid::Grid::build(
 	n_gselements = ne_gs; // correct to mod32 == 0
 	n_gsvertices = nv_gs; // correct to mod32 == 0
 
-	_min_coeff = mincoeff;
-	_max_coeff = maxcoeff;
-
+	
 	size_t gbuf_size = 0;
 	
 	int* vidmap = (int*)gm.add_buf(_name + " vid map ", sizeof(int) * nv, vlexi2gs.data(), sizeof(int) * nv); gbuf_size += sizeof(int) * nv;
@@ -2374,6 +2365,10 @@ size_t grid::Grid::build(
 
 	// finest layer
 	if (layer == 0) {
+		_min_coeff = mincoeff;
+		_max_coeff = maxcoeff;
+		_isosurface_value = (_min_coeff + _max_coeff) / 2;
+
 		_gbuf.rho_e = (float*)gm.add_buf(_name + "rho_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;		
 		_gbuf.eActiveBits = (unsigned int*)gm.add_buf(_name + "eActiveBits", sizeof(unsigned int)*ebit._bitArray.size(), ebit._bitArray.data()); gbuf_size += sizeof(unsigned int) * ebit._bitArray.size();
 		_gbuf.eActiveChunkSum = (int*)gm.add_buf(_name + "eActiveChunkSum", sizeof(int)*ebit._chunkSat.size(), ebit._chunkSat.data()); gbuf_size += sizeof(int) * ebit._chunkSat.size();
@@ -2384,7 +2379,12 @@ size_t grid::Grid::build(
 		{
 			_gbuf.KnotSer[i] = (float*)gm.add_buf(_name + "KnotSer " + std::to_string(i), sizeof(float) * spknotspan[i]); gbuf_size += sizeof(float) * spknotspan[i];
 		}
-		
+
+		for (int i = 0; i < 3; i++)
+		{
+			_gbuf.surface_points[i] = (float*)gm.add_buf(_name + " SurfacePoints " + std::to_string(i), sizeof(int) * _num_surface_points); 
+			gbuf_size += sizeof(int) * _num_surface_points;
+		}
 	}
 
 	// allocate v2e topology buffer 
@@ -2663,6 +2663,8 @@ void grid::Grid::set_spline_knot_series(void)
 		gpu_manager_t::upload_buf(_gbuf.KnotSer[i], KnotSer[i].data(), sizeof(float) * spknotspan[i]);
 	}
 
+#if 0
+#ifdef ENABLE_MATLAB
 	// download to host
 	std::vector<float> KnotSer_host[3];
 
@@ -2671,8 +2673,6 @@ void grid::Grid::set_spline_knot_series(void)
 		KnotSer_host[i].resize(spknotspan[i]);
 		gpu_manager_t::download_buf(KnotSer_host[i].data(), _gbuf.KnotSer[i], sizeof(float) * spknotspan[i]);
 	}
-#if 0
-#ifdef ENABLE_MATLAB
 	Eigen::VectorXf KnotSer_x;
 	KnotSer_x.resize(spknotspan[0]);
 	std::copy(KnotSer_host[0].begin(), KnotSer_host[0].end(), KnotSer_x.data());
@@ -2693,6 +2693,34 @@ void grid::Grid::set_spline_knot_series(void)
 #endif
 }
 
+void grid::Grid::uploadSurfacePoints(void)
+{
+	// upload to device
+	for (int i = 0; i < 3; i++)
+	{
+		gpu_manager_t::upload_buf(_gbuf.surface_points[i], spline_surface_node[i].data(), sizeof(float) * _num_surface_points);
+	}
+
+#if 1
+#ifdef ENABLE_MATLAB
+	std::vector<float> surface_points_host[3];
+	for (int i = 0; i < 3; i++)
+	{
+		surface_points_host[i].resize(_num_surface_points);
+		gpu_manager_t::download_buf(surface_points_host[i].data(), _gbuf.surface_points[i], sizeof(float) * _num_surface_points);
+	}
+	Eigen::VectorXf surface_points_x(_num_surface_points);
+	Eigen::VectorXf surface_points_y(_num_surface_points);
+	Eigen::VectorXf surface_points_z(_num_surface_points);
+	std::copy(surface_points_host[0].begin(), surface_points_host[0].end(), surface_points_x.data());
+	std::copy(surface_points_host[1].begin(), surface_points_host[1].end(), surface_points_y.data());
+	std::copy(surface_points_host[2].begin(), surface_points_host[2].end(), surface_points_z.data());
+	eigen2ConnectedMatlab("gpu_surf_x", surface_points_x);
+	eigen2ConnectedMatlab("gpu_surf_y", surface_points_y);
+	eigen2ConnectedMatlab("gpu_surf_z", surface_points_z);
+#endif
+#endif
+}
 
 void grid::Grid::readDisplacement(std::string displacementfile)
 {
@@ -3008,7 +3036,7 @@ std::vector<int> generateEquidistantIntegers(int range, int num_sample) {
 	return points;
 }
 
-void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3])
+void Grid::compute_surface_nodes_in_model(std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z)
 {
 	//#ifdef  ENABLE_MATLAB
 	//	Eigen::Matrix<float, -1, 1> surf_x3, surf_y3, surf_z3;
@@ -3029,7 +3057,7 @@ void Grid::compute_surface_nodes_in_model(int Nodes[3], std::vector<float>& surf
 	std::vector<float> vert_final[3];
 	std::vector<float> reduced_surf_nodes[3];
 	const unsigned int num = surface_node_x.size();
-	const unsigned int num_surface_points = 100000;
+	const unsigned int num_surface_points = _num_surface_points;
 	float smallmove = 1e-3f;
 	std::vector<Point> init_surface_nodes;
 	std::vector<Point> closest_points_set;
@@ -3246,13 +3274,12 @@ void Grid::generate_spline_surface_nodes(void)
 #endif
 
 	int N[3] = { cur_ereso, cur_ereso, cur_ereso };
-	// MARK[TODO] use mc to generate surface nodes
+	// MARK[TOCHECK] sometime crash in mc points generation
 	generate_surface_nodes_by_MC(_meshfile, N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode, mcPoints_val);
 	std::cout << "spline surface node number (after marching cube): " << spline_surface_node->size() << std::endl;
 	pass_spline_surf_node2matlab();
 
-	//
-	compute_surface_nodes_in_model(N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode);
+	compute_surface_nodes_in_model(spline_surface_node[0], spline_surface_node[1], spline_surface_node[2]);
 	std::cout << "spline surface node number (in model): " << spline_surface_node->size() << std::endl;
 }
 
