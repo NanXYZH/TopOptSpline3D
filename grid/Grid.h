@@ -234,6 +234,13 @@ namespace grid {
 		struct {
 			float* coeffs;
 			float* surface_points[3];
+			float* surface_normal[3];
+			float* surface_normal_direction;
+			float* surface_normal_dc[3];            // derivative to coeffs
+			float* surface_normal_norm_dc;      
+
+			float* surface_points_flag;             // compute the support constraint: 1 (not support) 0 (support)
+			float* surface_points_flag_virtual;
 			//float* de2dc;
 			float* KnotSer[3];
 			float* rho_e;
@@ -551,11 +558,13 @@ namespace grid {
 		
 		void uploadSurfacePointsSymbol(void);
 
+		void uploadSymbol2device(void);
+
 		void uploadCoeffsSymbol(void);
 
 		void set_spline_knot_series(void);
 
-		void set_spline_knot_infoSymbol(void);
+		void set_spline_knot_infoSymbol(void);  // include upload to device
 				
 		void coeff2density(void);
 
@@ -564,6 +573,18 @@ namespace grid {
 		void ddensity2dcoeff_update(void);
 
 		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso);
+
+		// constraint
+		void compute_spline_surface_point_normal(void);
+		void correct_spline_surface_point_normal_direction(void);
+		void compute_selfsupp_constraint(void);
+		void compute_selfsupp_constraint_virtual(void);
+
+		//[MARK] : may gather them
+		void compute_spline_surface_point_normal_dcoeff(void);
+		void compute_spline_surface_point_normal_norm_dcoeff(void);
+
+		void compute_spline_selfsupp_constraint_dcoeff(void);
 
 		double unitizeForce(void);
 

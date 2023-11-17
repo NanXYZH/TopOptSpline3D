@@ -32,9 +32,14 @@ extern  __constant__ float gnstep[3];
 extern  __constant__ float gnBoundMin[3];
 extern  __constant__ float gnBoundMax[3];
 
-extern  __constant__  float* gpu_KnotSer[3];
-extern  __constant__  float* gpu_cijk;
+extern  __constant__ float* gpu_KnotSer[3];
+extern  __constant__ float* gpu_cijk;
 extern  __constant__ float* gpu_SurfacePoints[3];
+extern  __constant__ float* gpu_surface_normal[3];
+extern  __constant__ float* gpu_surface_normal_direction[1];
+extern  __constant__ float* surface_normal_dc[3];         // derivative to coeffs
+extern  __constant__ float* surface_normal_norm_dc[1];
+
 
 void TestSuit::setDensity(float* newrho)
 {

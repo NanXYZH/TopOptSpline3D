@@ -437,9 +437,16 @@ __global__ void array_max(T* in1, T* in2, T* out, size_t n) {
 	}
 }
 
-
 template<typename Lambda>
 __global__ void traverse(Scaler* dst, int num, Lambda func) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	if (tid < num) {
+		dst[tid] = func(tid);
+	}
+}
+
+template<typename Lambda>
+__global__ void traverse(float* dst, int num, Lambda func) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if (tid < num) {
 		dst[tid] = func(tid);
@@ -463,6 +470,17 @@ __global__ void traverse(Scaler* dst[], int num_array, int array_size, Lambda fu
 		dst[array_id][entry_id] = func(array_id, entry_id);
 	}
 }
+
+template<typename Lambda>
+__global__ void traverse(float* dst[], int num_array, int array_size, Lambda func) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	int array_id = tid / array_size;
+	int entry_id = tid % array_size;
+	if (tid < array_size * num_array) {
+		dst[array_id][entry_id] = func(array_id, entry_id);
+	}
+}
+
 
 template<typename Lambda>
 __global__ void traverse_noret(int num_array, int array_size, Lambda func) {

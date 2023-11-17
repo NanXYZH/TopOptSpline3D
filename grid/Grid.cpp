@@ -2385,6 +2385,25 @@ size_t grid::Grid::build(
 			_gbuf.surface_points[i] = (float*)gm.add_buf(_name + " SurfacePoints " + std::to_string(i), sizeof(int) * _num_surface_points); 
 			gbuf_size += sizeof(int) * _num_surface_points;
 		}
+
+		for (int i = 0; i < 3; i++)
+		{
+			_gbuf.surface_normal[i] = (float*)gm.add_buf(_name + " SurfaceNormal " + std::to_string(i), sizeof(float) * _num_surface_points);
+			_gbuf.surface_normal_dc[i] = (float*)gm.add_buf(_name + " SurfaceNormaldc " + std::to_string(i), sizeof(float) * _num_surface_points);
+			gbuf_size += sizeof(float) * _num_surface_points;
+			gbuf_size += sizeof(float) * _num_surface_points;
+		} 
+
+		_gbuf.surface_normal_direction = (float*)gm.add_buf(_name + " SurfaceNormaldirection ", sizeof(float) * _num_surface_points);
+		gbuf_size += sizeof(float) * _num_surface_points;
+		_gbuf.surface_normal_norm_dc = (float*)gm.add_buf(_name + " SurfaceNormalnormdc ", sizeof(float) * _num_surface_points);
+		gbuf_size += sizeof(float) * _num_surface_points;
+
+		_gbuf.surface_points_flag = (float*)gm.add_buf(_name + " SurfacePointsflag ", sizeof(float) * _num_surface_points);
+		gbuf_size += sizeof(float) * _num_surface_points;
+		_gbuf.surface_points_flag_virtual = (float*)gm.add_buf(_name + " SurfacePointsflagVirtual ", sizeof(float) * _num_surface_points);
+		gbuf_size += sizeof(float) * _num_surface_points;
+
 	}
 
 	// allocate v2e topology buffer 

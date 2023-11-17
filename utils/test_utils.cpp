@@ -897,9 +897,21 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	initDensities(1);
 	float Vgoal = 1;
 #endif
+	// for surface points test
+
 	grids[0]->generate_spline_surface_nodes();
 	grids[0]->uploadSurfacePoints();
 	grids[0]->uploadSurfacePointsSymbol();
+	grids[0]->uploadSymbol2device();
+	
+	grids[0]->compute_spline_surface_point_normal();
+	grids[0]->correct_spline_surface_point_normal_direction();
+	grids[0]->compute_selfsupp_constraint();
+	grids[0]->compute_selfsupp_constraint_virtual();
+
+	
+
+	// end
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 
