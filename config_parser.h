@@ -57,11 +57,19 @@ DECLARE_double(min_coeff);
 
 DECLARE_double(max_coeff);
 
+DECLARE_double(default_print_angle);
+
+DECLARE_double(opt_print_angle);
+
 DECLARE_double(poisson_ratio);
 
 DECLARE_double(shell_width);
 
 DECLARE_string(workmode);
+
+DECLARE_string(SSmode);
+
+DECLARE_string(Dripmode);
 
 DECLARE_string(testname);
 

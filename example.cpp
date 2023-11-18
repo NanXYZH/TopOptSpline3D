@@ -46,7 +46,7 @@ int ex_main() {
     pcoords[i+1]*=0.5;
     pcoords[i+2]*=0.25;
   }
-  setParameters(0.5,0.1,0.1,0.1,0.1,1,1e-3,128,1,0.3,2,false,false,10,10,10,3,0,1);
+  setParameters(0.5,0.1,0.1,0.1,0.1,1,1e-3,128,1,0.3,2,false,false,10,10,10,3,0,1,0.75,0.75);
 
   setBoundaryCondition([](double pos[3])->bool {
     return pos[0]<0.1;

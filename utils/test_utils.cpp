@@ -909,7 +909,8 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	grids[0]->compute_selfsupp_constraint();
 	grids[0]->compute_selfsupp_constraint_virtual();
 
-	
+	grids[0]->compute_spline_selfsupp_constraint_dcoeff();
+	// * 1 / num_constraint
 
 	// end
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
@@ -944,7 +945,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		grids[0]->coeff2density();
 
 		// compute volume 
-		// MARK[TODO] : how to add changing volume ratio in MMA
+		// MARK[TODO] : how to add changing volume ratio in MMA (OK)
 		double vol = grids[0]->volumeRatio();
 		v[0] = volScale * (vol - params.volume_ratio);
 
@@ -979,7 +980,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		gpu_manager_t::pass_dev_buf_to_matlab("csens", grids[0]->getCSens(), grids[0]->n_cijk());
 
-		// MARK[TODO] dv not updated !!
+		// MARK[TODO] dv not updated !! (OK)
 		mma.update(grids[0]->getCSens(), &dv.data(), v.data());
 
 		//// update coeff
@@ -997,8 +998,6 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	// write volume record during optimization
 	bio::write_vector(grids.getPath("vrec"), volRecord);
 }
-
-
 
 std::pair<double, Eigen::VectorXd> SpectraFindLargestEigenPair(const Eigen::MatrixXd& mat) {
 	// construct matrix operation object using the wrapper class DenseSymMatProd

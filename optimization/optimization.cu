@@ -48,6 +48,11 @@ extern  __constant__ float* gpu_surface_normal_direction[1];
 extern  __constant__ float* gpu_surface_normal_dc[3];         // derivative to coeffs
 extern  __constant__ float* gpu_surface_normal_norm_dc[1];
 
+extern  __constant__ int gssmode[1];
+extern  __constant__ int gdripmode[1];
+extern  __constant__ float gdefaultPrintAngle[1];
+extern  __constant__ float goptPrintAngle[1];
+
 
 extern __device__ void loadTemplateMatrix(volatile double KE[24][24]);
 

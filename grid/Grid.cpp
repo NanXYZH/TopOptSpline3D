@@ -1929,6 +1929,11 @@ void* grid::Grid::_tmp_buf2 = nullptr;
 size_t grid::Grid::_tmp_buf2_size = 0;
 
 grid::Mode grid::Grid::_mode;
+grid::GlobalSSMode grid::Grid::_ssmode;
+grid::GlobalDripMode grid::Grid::_dripmode;
+
+float grid::Grid::_default_print_angle = 3 * M_PI / 4;
+float grid::Grid::_opt_print_angle = 3 * M_PI / 4;
 
 int grid::Grid::n_order = 0;       // The order of implicit spline
 size_t grid::Grid::n_partitionx = 0;  // The number of partition of X,Y,Z direction
@@ -2375,6 +2380,12 @@ size_t grid::Grid::build(
 		_gbuf.nword_ebits = ebit._bitArray.size();
 
 		_gbuf.coeffs = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		_gbuf.ss_sens = (float*)gm.add_buf(_name + " ss_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		_gbuf.drip_sens = (float*)gm.add_buf(_name + " drip_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+
+		_gbuf.ss_value = (float*)gm.add_buf(_name + " ss_value ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
+		_gbuf.drip_value = (float*)gm.add_buf(_name + " drip_value ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
+
 		for (int i = 0; i < 3; i++)
 		{
 			_gbuf.KnotSer[i] = (float*)gm.add_buf(_name + "KnotSer " + std::to_string(i), sizeof(float) * spknotspan[i]); gbuf_size += sizeof(float) * spknotspan[i];
@@ -2386,6 +2397,7 @@ size_t grid::Grid::build(
 			gbuf_size += sizeof(int) * _num_surface_points;
 		}
 
+		/* may not use */
 		for (int i = 0; i < 3; i++)
 		{
 			_gbuf.surface_normal[i] = (float*)gm.add_buf(_name + " SurfaceNormal " + std::to_string(i), sizeof(float) * _num_surface_points);
@@ -2393,12 +2405,11 @@ size_t grid::Grid::build(
 			gbuf_size += sizeof(float) * _num_surface_points;
 			gbuf_size += sizeof(float) * _num_surface_points;
 		} 
-
-		_gbuf.surface_normal_direction = (float*)gm.add_buf(_name + " SurfaceNormaldirection ", sizeof(float) * _num_surface_points);
-		gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.surface_normal_norm_dc = (float*)gm.add_buf(_name + " SurfaceNormalnormdc ", sizeof(float) * _num_surface_points);
 		gbuf_size += sizeof(float) * _num_surface_points;
-
+		
+		_gbuf.surface_normal_direction = (float*)gm.add_buf(_name + " SurfaceNormaldirection ", sizeof(float) * _num_surface_points);
+		gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.surface_points_flag = (float*)gm.add_buf(_name + " SurfacePointsflag ", sizeof(float) * _num_surface_points);
 		gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.surface_points_flag_virtual = (float*)gm.add_buf(_name + " SurfacePointsflagVirtual ", sizeof(float) * _num_surface_points);

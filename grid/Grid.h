@@ -156,6 +156,24 @@ namespace grid {
 		with_support_free_force
 	};
 
+	enum GlobalSSMode {
+		p_norm_ss,      // only nz < 0
+		p_norm2_ss,     // all
+		h_function_ss,  // only nz < 0
+		h_function2_ss, // all
+		overhang_ss,    // only nz < 0
+		overhang2_ss    // all
+	};
+
+	enum GlobalDripMode	{
+		p_norm_drip,     // only nz < 0
+		p_norm2_drip,    // all
+		h_function_drip, // only nz < 0
+		h_function2_drip,// all
+		overhang2_drip,  // only nz < 0
+		overhang_drip    // all
+	};
+
 	template<typename dt = double, int N = 3>
 	struct hostbufbackup_t {
 		std::vector<dt> _hostbuf[N];
@@ -183,6 +201,8 @@ namespace grid {
 		static void* _tmp_buf;
 		static size_t _tmp_buf_size;
 		static Mode _mode;
+		static GlobalSSMode _ssmode;
+		static GlobalDripMode _dripmode;
 		static void setOutDir(const std::string& outdir);
 		static void setMeshFile(const std::string& meshfile);
 		static const std::string& getOutDir(void);
@@ -194,6 +214,9 @@ namespace grid {
 		static size_t _tmp_buf1_size;
 		static void* _tmp_buf2;
 		static size_t _tmp_buf2_size;
+
+		static float _default_print_angle;
+		static float _opt_print_angle;
 
 		static int n_order;       // The order of implicit spline
 		static size_t n_partitionx;  // The number of partition of X,Y,Z direction
@@ -238,6 +261,11 @@ namespace grid {
 			float* surface_normal_direction;
 			float* surface_normal_dc[3];            // derivative to coeffs
 			float* surface_normal_norm_dc;      
+
+			float* ss_value;
+			float* drip_value;
+			float* ss_sens;
+			float* drip_sens;
 
 			float* surface_points_flag;             // compute the support constraint: 1 (not support) 0 (support)
 			float* surface_points_flag_virtual;
@@ -294,6 +322,14 @@ namespace grid {
 		int _ereso = 0;
 
 		float _min_density = 1e-3;
+
+		float p_norm = 8.0f;
+
+		float sigmoid_c = 0.09;    // the parameter of sigmoid which change the local constraint to global
+
+		float hfunction_c = 10;    // the parameter of h function which change the local constraint to global
+
+		float tanh_g = 0.5;        // the parameter of tanh which change the local constraint to global
 
 		float _min_coeff = 0.f;
 		float _max_coeff = 1.0f;
@@ -459,6 +495,10 @@ namespace grid {
 
 		float* getCSens(void) { return _gbuf.c_sens; }
 
+		float* getSSSens(void) { return _gbuf.ss_sens; }
+
+		float* getDripSens(void) { return _gbuf.drip_sens; }
+
 		double** getWorstForce(void) { return _gbuf.Fworst; }
 
 		double** getWorstDisplacement(void) { return _gbuf.Uworst; }
@@ -580,12 +620,13 @@ namespace grid {
 		void compute_selfsupp_constraint(void);
 		void compute_selfsupp_constraint_virtual(void);
 
-		//[MARK] : may gather them
+		void compute_spline_selfsupp_constraint_dcoeff(void);
+		void scale_spline_selfsupp_constraint_dcoeff(void);
+
+		//[MARK] : may gather them -- > not use
 		void compute_spline_surface_point_normal_dcoeff(void);
 		void compute_spline_surface_point_normal_norm_dcoeff(void);
-
-		void compute_spline_selfsupp_constraint_dcoeff(void);
-
+		
 		double unitizeForce(void);
 
 		void pertubDisplacement(double ratio);
@@ -675,21 +716,23 @@ namespace grid {
 			int coarse_reso = 32;
 			double shell_width = 0;
 			gpu_manager_t* gmem;
-			int n_order;       // The order of implicit spline
-			int n_partitionx;  // The number of partition of X,Y,Z direction
-			int n_partitiony;
-			int n_partitionz;
-			int n_im;          // The number of knot series of X,Y,Z direction
-			int n_in;
-			int n_il;
-			int n_knotspanx;   // The number of knot of X,Y,Z direction
-			int n_knotspany;
-			int n_knotspanz;
+			int n_order = 3;       // The order of implicit spline
+			int n_partitionx = 10;  // The number of partition of X,Y,Z direction
+			int n_partitiony = 10;
+			int n_partitionz = 10;
+			int n_im = 13;          // The number of knot series of X,Y,Z direction
+			int n_in = 13;
+			int n_il = 13;
+			int n_knotspanx = 16;   // The number of knot of X,Y,Z direction
+			int n_knotspany = 16;
+			int n_knotspanz = 16;
 
-			float min_coeff;
-			float max_coeff;
-			float isosurface_value;
+			float min_coeff = 0;
+			float max_coeff = 1;
+			float isosurface_value = 0.5;
 
+			float default_print_angle = 3 * M_PI / 4;
+			float opt_print_angle = 3 * M_PI / 4;
 		}_setting;
 
 		int _nlayer = 0;
@@ -709,6 +752,10 @@ namespace grid {
 		float _min_density;
 
 		Mode _mode;
+
+		GlobalSSMode _ssmode;
+
+		GlobalDripMode _dripmode;
 
 		//std::vector<float> _pcoords;
 		//std::vector<int> _trifaces;
@@ -778,6 +825,12 @@ namespace grid {
 		void enable_logcompliance(bool en) { if (en)_logFlag |= LogMask::mask_log_compliance; else _logFlag &= ~(int)(mask_log_compliance); };
 
 		void setMode(Mode mode);
+
+		void setSSMode(GlobalSSMode mode);
+
+		void setDripMode(GlobalDripMode mode);
+
+		void setPrintAngle(float default_angle_ratio, float opt_angle_ratio);
 
 		static std::string getModeStr(Mode mode);
 

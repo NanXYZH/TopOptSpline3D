@@ -29,6 +29,8 @@ struct Parameter {
 	float min_cijk;
 	float max_cijk;
 	float isosurface_value;
+	float default_print_angle;
+	float opt_print_angle;
 };
 
 extern Parameter params;
@@ -42,13 +44,17 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order, float min_cijk, float max_cijk);
+	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order, float min_cijk, float max_cijk, float default_print_angle, float opt_print_angle);
 
 void setOutpurDir(const std::string& dirname);
 
 void setInputMesh(const std::string& inputmesh);
 
 void setWorkMode(const std::string& modestr);
+
+void setSSMode(const std::string& modestr);
+
+void setDripMode(const std::string& modestr);
 
 void setDEBUG(bool debug = false);
 

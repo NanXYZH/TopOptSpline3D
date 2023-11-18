@@ -35,7 +35,7 @@ void logParams(std::string file, std::string version_str, int argc, char** argv)
 void setParameters(
 	float volRatio, float volDecrease, float designStep, float filterRadi, float dampRatio, float powerPenal,
 	float min_density, int gridreso, float youngs_modulu, float poisson_ratio, float shell_width,
-	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order, float min_coeff, float max_coeff
+	bool logdensity, bool logcompliance, int partitionx, int partitiony, int partitionz, int spline_order, float min_coeff, float max_coeff, float default_print_angle, float opt_print_angle
 ) {
 	params.volume_ratio = volRatio;
 	params.volume_decrease = volDecrease;
@@ -61,6 +61,7 @@ void setParameters(
 	grids.set_shell_width(shell_width);
 	grids.enable_logdensity(logdensity);
 	grids.enable_logcompliance(logcompliance);
+	grids.setPrintAngle(default_print_angle, opt_print_angle);
 }
 
 void setOutpurDir(const std::string& dirname)
@@ -94,7 +95,6 @@ void setInputMesh(const std::string& inputmesh)
 	grids.setMeshFile(meshfile);
 }
 
-
 void setWorkMode(const std::string& modestr)
 {
 	if (modestr == "nscf") {
@@ -115,6 +115,58 @@ void setWorkMode(const std::string& modestr)
 	}
 }
 
+void setSSMode(const std::string& modestr)
+{
+	if (modestr == "p") {
+		grids.setSSMode(grid::GlobalSSMode::p_norm_ss);
+	} 
+	else if (modestr == "p2") {
+		grids.setSSMode(grid::GlobalSSMode::p_norm2_ss);
+	}
+	else if (modestr == "h")	{
+		grids.setSSMode(grid::GlobalSSMode::h_function_ss);
+	}
+	else if (modestr == "h2") {
+		grids.setSSMode(grid::GlobalSSMode::h_function2_ss);
+	}
+	else if (modestr == "oh") {
+		grids.setSSMode(grid::GlobalSSMode::overhang_ss);
+	}
+	else if (modestr == "oh2") {
+		grids.setSSMode(grid::GlobalSSMode::overhang2_ss);
+	}
+	else {
+		printf("-- unsupported mode\n");
+		exit(-1);
+	}
+}
+
+void setDripMode(const std::string& modestr)
+{
+	if (modestr == "p") {
+		grids.setDripMode(grid::GlobalDripMode::p_norm_drip);
+	}
+	else if (modestr == "p2") {
+		grids.setDripMode(grid::GlobalDripMode::p_norm2_drip);
+	}
+	else if (modestr == "h") {
+		grids.setDripMode(grid::GlobalDripMode::h_function_drip);
+	}
+	else if (modestr == "h2") {
+		grids.setDripMode(grid::GlobalDripMode::h_function2_drip);
+	}
+	else if (modestr == "oh") {
+		grids.setDripMode(grid::GlobalDripMode::overhang_drip);
+	}
+	else if (modestr == "oh2") {
+		grids.setDripMode(grid::GlobalDripMode::overhang2_drip);
+	}
+	else {
+		printf("-- unsupported mode\n");
+		exit(-1);
+	}
+}
+
 void solveFEM(void)
 {
 	double rel_res = 1;
@@ -122,7 +174,6 @@ void solveFEM(void)
 		rel_res = grids.v_cycle();
 	}
 }
-
 
 void matlab_utils_test(void) {
 #ifdef ENABLE_MATLAB

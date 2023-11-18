@@ -41,11 +41,19 @@ DEFINE_double(min_coeff, 0, "Minimal coeff restriction");
 
 DEFINE_double(max_coeff, 1, "Minimal coeff restriction");
 
+DEFINE_double(default_print_angle, 3/4, "Default print angle");
+
+DEFINE_double(opt_print_angle, 3/4, "Print angle in optimization");
+
 DEFINE_double(poisson_ratio, 0.4, "Material Poisson Ratio");
 
 DEFINE_double(shell_width, 3, "Shell width in the unit of element");
 
 DEFINE_string(workmode, "", "Working mode");
+
+DEFINE_string(SSmode, "oh", "Self-Supporting mode");
+
+DEFINE_string(Dripmode, "oh", "Drip mode");
 
 DEFINE_string(testname, "None", "Specifying a test name ");
 
@@ -494,6 +502,8 @@ void output_option(void) {
 	std::cout << " =spline_order     - - - - - - - - - - - - - - - -   " << FLAGS_spline_order << std::endl;
 	std::cout << " =min_ceoff        - - - - - - - - - - - - - - - -   " << FLAGS_min_coeff << std::endl;
 	std::cout << " =max_ceoff        - - - - - - - - - - - - - - - -   " << FLAGS_max_coeff << std::endl;
+	std::cout << " =default_angle    - - - - - - - - - - - - - - - -   " << FLAGS_default_print_angle << std::endl;
+	std::cout << " =opt_angle        - - - - - - - - - - - - - - - -   " << FLAGS_opt_print_angle << std::endl;
 	std::cout << " =enable_log       - - - - - - - - - - - - - - - -   " << (FLAGS_enable_log ? "Yes" : "No") << std::endl;
 	std::cout << " =max_itn          - - - - - - - - - - - - - - - -   " << FLAGS_max_itn << std::endl;
 	std::cout << " =min_density      - - - - - - - - - - - - - - - -   " << FLAGS_min_density << std::endl;
@@ -501,6 +511,8 @@ void output_option(void) {
 	std::cout << " =poisson_ratio    - - - - - - - - - - - - - - - -   " << FLAGS_poisson_ratio << std::endl;
 	std::cout << " =shell_width      - - - - - - - - - - - - - - - -   " << FLAGS_shell_width << std::endl;
 	std::cout << " =work_mode        - - - - - - - - - - - - - - - -   " << FLAGS_workmode << std::endl;
+	std::cout << " =ss_mode          - - - - - - - - - - - - - - - -   " << FLAGS_SSmode << std::endl;
+	std::cout << " =drip_mode        - - - - - - - - - - - - - - - -   " << FLAGS_Dripmode << std::endl;
 	std::cout << " =logdensity       - - - - - - - - - - - - - - - -   " << (FLAGS_logdensity ? "Yes" : "No") << std::endl;
 	std::cout << " =logcompliance    - - - - - - - - - - - - - - - -   " << (FLAGS_logcompliance ? "Yes" : "No") << std::endl;
 	std::cout << " =testname         - - - - - - - - - - - - - - - -   " << FLAGS_testname << std::endl;

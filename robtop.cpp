@@ -32,13 +32,17 @@ int main(int argc, char** argv)
 	setParameters(
 		FLAGS_volume_ratio, FLAGS_vol_reduction, FLAGS_design_step, FLAGS_filter_radius, FLAGS_damp_ratio, FLAGS_power_penalty, FLAGS_min_density,
 		FLAGS_gridreso, FLAGS_youngs_modulus, FLAGS_poisson_ratio, FLAGS_shell_width,
-		FLAGS_logdensity, FLAGS_logcompliance, FLAGS_partitionx, FLAGS_partitiony, FLAGS_partitionz, FLAGS_spline_order, FLAGS_min_coeff, FLAGS_max_coeff);
+		FLAGS_logdensity, FLAGS_logcompliance, FLAGS_partitionx, FLAGS_partitiony, FLAGS_partitionz, FLAGS_spline_order, FLAGS_min_coeff, FLAGS_max_coeff, FLAGS_default_print_angle, FLAGS_opt_print_angle);
 
 	setOutpurDir(FLAGS_outdir);
 
 	setInputMesh(FLAGS_meshfile);
 
 	setWorkMode(FLAGS_workmode);
+
+	setSSMode(FLAGS_SSmode);
+
+	setDripMode(FLAGS_Dripmode);
 
 	setBoundaryCondition(parser.inFixArea, parser.inLoadArea, parser.loadField);
 	

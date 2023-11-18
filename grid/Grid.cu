@@ -52,8 +52,14 @@ __constant__ float* gpu_cijk;
 __constant__ float* gpu_SurfacePoints[3];
 __constant__ float* gpu_surface_normal[3];
 __constant__ float* gpu_surface_normal_direction[1];
+
 __constant__ float* gpu_surface_normal_dc[3];         // derivative to coeffs
 __constant__ float* gpu_surface_normal_norm_dc[1];
+
+__constant__ int gssmode[1];
+__constant__ int gdripmode[1];
+__constant__ float gdefaultPrintAngle[1];
+__constant__ float goptPrintAngle[1];
 
 extern __constant__ double* gLoadtangent[2][3];
 extern __constant__ double* gLoadnormal[3];
@@ -94,6 +100,60 @@ __device__ float Dirac(float s) {
 	}
 #endif
 }
+
+__device__ float h(float x, float para_func) {
+#if 1
+	return x >= 1 ? para_func * (x - 1) * (x - 1) : 0; // hfunction_c
+#else 
+	// 4 --> tanh func (这个不适用于这里，具体的看函数图像就知道了,因为有部分是负的，算出来约束不对)
+	 //return 2 / (1 + expf(-2 * x / tanh_g)) - 1;
+	// 5 --> sigmoid function
+	return 1 / (1 + expf(-(x - 1) / para_func)); // sigmoid_c
+	//
+#endif
+}
+
+__device__ float dh(float x, float para_func) {
+#if 1
+	return x >= 1 ? 2 * para_func * (x - 1) : 0; // hfunction_c
+#else
+	// 4 --> tanh func (这个不适用于这里，具体的看函数图像就知道了,因为有部分是负的，算出来约束不对)
+	 //return 4 * expf(-2 * x / tanh_g) / (1 + expf(-2 * x / tanh_g)) / (1 + exp(-2 * x / tanh_g)) / tanh_g;
+	// 5 --> Sigmoid function
+	return 1 / (1 + expf(-(x - 1) / para_func)) / (1 + expf(-(x - 1) / para_func)) / para_func * expf(-(x - 1) / para_func); // sigmoid_c
+#endif
+}
+
+__device__ float oh(float x, float para_func) {
+#if 0
+	return x >= 1 ? para_func * (x - 1) * (x - 1) + 1 : 1;  // hfunction_c
+#else 
+	// 1 --> tanh func (这个不适用于这里，具体的看函数图像就知道了,因为有部分是负的，算出来约束不对)
+	 //return 2 / (1 + expf(-2 * x / tanh_g)) - 1;
+	// 2 --> sigmoid function (false)
+	//return 1 / (1 + expf(-(x - 1) / sigmoid_c));
+	// 3 --> sigmoid function (good)
+	return 1 / (1 + expf(-(x - 1.5) / para_func)) + 1;  // sigmoid_c
+	// 4 --> polynomial function
+	//return -(x - 0.7) * (x - 0.7) + 1;
+#endif
+}
+
+__device__ float doh(float x, float para_func) {
+#if 0
+	return x >= 1 ? 2 * para_func * (x - 1) : 0; // hfunction_c
+#else
+	// 1 --> tanh func (这个不适用于这里，具体的看函数图像就知道了,因为有部分是负的，算出来约束不对)
+	 //return 4 * expf(-2 * x / tanh_g) / (1 + expf(-2 * x / tanh_g)) / (1 + exp(-2 * x / tanh_g)) / tanh_g;
+	// 2 --> Sigmoid function (false)
+	//return 1 / (1 + expf(-(x - 1) / sigmoid_c)) / (1 + expf(-(x - 1) / sigmoid_c)) / sigmoid_c * expf(-(x - 1) / sigmoid_c);
+	// 3 --> Sigmoid function (good)
+	return 1 / (1 + expf(-(x - 1.5) / para_func)) / (1 + expf(-(x - 1.5) / para_func)) / para_func * expf(-(x - 1.5) / para_func); // sigmoid_c
+	// 4 --> polynomial function
+	//return -2 * (x - 0.7);
+#endif
+}
+
 
 void Grid::use_grid(void)
 {
@@ -2890,9 +2950,40 @@ void Grid::v3_copy(double* vsrc[3], double* vdst[3])
 void HierarchyGrid::setMode(Mode mode)
 {
 	int modeid = mode;
+	std::cout << "--[TEST] mode id: " << modeid << std::endl;
 	_mode = mode;
 	Grid::_mode = mode;
 	cudaMemcpyToSymbol(gmode, &modeid, sizeof(int));
+}
+
+void HierarchyGrid::setSSMode(GlobalSSMode mode)
+{
+	int modeid = mode;
+	_ssmode = mode;
+	Grid::_ssmode = mode;
+	cudaMemcpyToSymbol(gssmode, &modeid, sizeof(int));
+}
+
+void HierarchyGrid::setDripMode(GlobalDripMode mode)
+{
+	int modeid = mode;
+	_dripmode = mode;
+	Grid::_dripmode = mode;
+	cudaMemcpyToSymbol(gdripmode, &modeid, sizeof(int));
+}
+
+void HierarchyGrid::setPrintAngle(float default_angle_ratio, float opt_angle_ratio)
+{
+	float sdefault = default_angle_ratio * M_PI;
+	_setting.default_print_angle = sdefault;
+	Grid::_default_print_angle = sdefault;
+	cudaMemcpyToSymbol(gdefaultPrintAngle, &sdefault, sizeof(float));
+	cuda_error_check;
+
+	float sopt = opt_angle_ratio * M_PI;
+	_setting.opt_print_angle = sopt;
+	Grid::_opt_print_angle = sopt;
+	cudaMemcpyToSymbol(goptPrintAngle, &sopt, sizeof(float));
 }
 
 void HierarchyGrid::set_spline_partition(int spartx, int sparty, int spartz, int sorder)
@@ -5282,10 +5373,10 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 
 #ifdef ENABLE_MATLAB
 	Scaler* host_spline = new Scaler[n];
-	cudaMemcpy(host_spline, _gbuf.surface_normal_direction, sizeof(Scaler)* n, cudaMemcpyDeviceToHost);
+	cudaMemcpy(host_spline, _gbuf.surface_normal_direction, sizeof(float)* n, cudaMemcpyDeviceToHost);
+	cuda_error_check;
 	gpu_manager_t::pass_buf_to_matlab("spline_surface_normal_direction", host_spline, n);
 	delete host_spline;
-	cuda_error_check;
 #endif
 
 	// MARK[TO CHECK] parallel_sum
@@ -5339,7 +5430,7 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 
 void grid::Grid::compute_selfsupp_constraint(void)
 {
-	float default_print_angle = 3 * M_PI / 4;
+	float default_print_angle = _default_print_angle;
 
 	auto calc_node = [=] __device__(int node_id) {
 		float p[3] = { 0.f };
@@ -5388,7 +5479,7 @@ void grid::Grid::compute_selfsupp_constraint(void)
 
 void grid::Grid::compute_selfsupp_constraint_virtual(void)
 {
-	float print_angle = 3 * M_PI / 4;
+	float print_angle = _opt_print_angle;
 
 	auto calc_node = [=] __device__(int node_id) {
 		float p[3] = { 0.f };
@@ -5435,190 +5526,12 @@ void grid::Grid::compute_selfsupp_constraint_virtual(void)
 #endif
 }
 
-void grid::Grid::compute_spline_surface_point_normal_dcoeff(void)
-{
-	if (_layer != 0) return;
-
-	float* surface_direction = (float*)_gbuf.surface_normal_direction;
-
-	// MARK[TO CHECK] parallel_sum
-	float* tmp = (float*)getTempBuf(sizeof(float) * grid::Grid::spline_surface_node->size() / 100);
-	cuda_error_check;
-	float count = parallel_sum(_gbuf.surface_normal_direction, tmp, grid::Grid::spline_surface_node->size());
-	cudaDeviceSynchronize();
-	cuda_error_check;
-
-	float direction;
-	if (count > 0)
-	{
-		direction = 1.0f;
-	}
-	else
-	{
-		direction = -1.0f;
-	}
-
-	// computation
-	float* nxdc_tmp;
-	cudaMalloc(&nxdc_tmp, sizeof(float) * n_cijk());
-	init_array(nxdc_tmp, float{ 0 }, n_cijk());
-	cuda_error_check;
-
-	float* nydc_tmp;
-	cudaMalloc(&nydc_tmp, sizeof(float) * n_cijk());
-	init_array(nydc_tmp, float{ 0 }, n_cijk());
-	cuda_error_check;
-
-	float* nzdc_tmp;
-	cudaMalloc(&nzdc_tmp, sizeof(float) * n_cijk());
-	init_array(nzdc_tmp, float{ 0 }, n_cijk());
-	cuda_error_check;
-
-	float* normdc_tmp;
-	cudaMalloc(&normdc_tmp, sizeof(float) * n_cijk());
-	init_array(normdc_tmp, float{ 0 }, n_cijk());
-	cuda_error_check;
-
-	int order3 = m_iM * m_iM * m_iM;
-
-	float* cijk_value = _gbuf.coeffs;
-	float* knotx_ = _gbuf.KnotSer[0];
-	float* knoty_ = _gbuf.KnotSer[1];
-	float* knotz_ = _gbuf.KnotSer[2];
-	float* rholist = _gbuf.rho_e;
-	float* rho_diff = _gbuf.g_sens;
-	int* eidmap = _gbuf.eidmap;
-	int* eflag = _gbuf.eBitflag;
-
-	int ereso = _ereso;
-	float eh = elementLength();
-	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
-
-	size_t grid_size, block_size;
-	make_kernel_param(&grid_size, &block_size, grid::Grid::spline_surface_node->size(), 512);
-
-	auto node_diff = [=] __device__(int node_id) {
-		float pos[3] = { 0.f };
-		for (int i = 0; i < 3; i++)	pos[i] = gpu_SurfacePoints[i][node_id];
-		float direction_tmp = surface_direction[node_id];
-
-		float normal_vector[3] = { 0.f };
-		float normal_der_cijk[3] = { 0.f };
-		for (int i = 0; i < 3; i++) normal_vector[i] = gpu_surface_normal[i][node_id];
-
-		float normal_vector_norm = norm(normal_vector);
-
-		float val;
-		int i, j, k, ir, it, is, index;
-
-		float NX[m_iM] = { 0.f };
-		float pNX[m_iM] = { 0.f };
-		float NY[m_iM] = { 0.f };
-		float pNY[m_iM] = { 0.f };
-		float NZ[m_iM] = { 0.f };
-		float pNZ[m_iM] = { 0.f };
-
-		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
-		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
-		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
-		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
-
-		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
-		{
-			val = -0.2f;
-		}
-		else
-		{
-			SplineBasisX(pos[0], pNX);
-			SplineBasisY(pos[1], pNY);
-			SplineBasisZ(pos[2], pNZ);
-
-			val = 0.0f;
-			int count4coeff = 0;
-			//index = i + j * m_im + k * m_im * m_in;
-			for (ir = i - gorder[0]; ir < i; ir++)
-			{
-				for (is = j - gorder[0]; is < j; is++)
-				{
-					for (it = k - gorder[0]; it < k; it++)
-					{
-						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
-
-						normal_der_cijk[0] = direction * pNX[ir - i + gorder[0]] * NY[is - j + gorder[0]] * NZ[it - k + gorder[0]];
-						normal_der_cijk[1] = direction * NX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * NZ[it - k + gorder[0]];
-						normal_der_cijk[2] = direction * NX[ir - i + gorder[0]] * NY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
-
-						nxdc_tmp[index] += normal_der_cijk[0];
-						nydc_tmp[index] += normal_der_cijk[1];
-						nzdc_tmp[index] += normal_der_cijk[2];
-
-						val = dot(normal_vector, normal_der_cijk) / normal_vector_norm;
-						normdc_tmp[index] += val;
-						count4coeff++;
-					}
-				}
-			}
-		}
-	};
-
-	traverse_noret << <grid_size, block_size >> > (grid::Grid::spline_surface_node->size(), node_diff);
-	cudaDeviceSynchronize();
-	cuda_error_check;
-
-	float* nxdc_host = new float[n_cijk()];
-	float* nydc_host = new float[n_cijk()];
-	float* nzdc_host = new float[n_cijk()];
-	float* normdc_host = new float[n_cijk()];
-	cudaMemcpy(nxdc_host, nxdc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
-	cudaMemcpy(nydc_host, nydc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
-	cudaMemcpy(nzdc_host, nzdc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
-	cudaMemcpy(normdc_host, normdc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
-	cuda_error_check;
-	// upload to _gbuf.c_sens
-	init_array(_gbuf.surface_normal_dc[0], float{ 0 }, n_cijk());
-	init_array(_gbuf.surface_normal_dc[1], float{ 0 }, n_cijk());
-	init_array(_gbuf.surface_normal_dc[2], float{ 0 }, n_cijk());
-	init_array(_gbuf.surface_normal_norm_dc, float{ 0 }, n_cijk());
-	// [MARK]
-	cudaMemcpy(_gbuf.surface_normal_dc[0], nxdc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(_gbuf.surface_normal_dc[1], nydc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(_gbuf.surface_normal_dc[2], nzdc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(_gbuf.surface_normal_norm_dc, normdc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
-	//cudaMemcpy(_gbuf.c_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
-	cuda_error_check;
-
-#ifdef ENABLE_MATLAB
-	gpu_manager_t::pass_buf_to_matlab("normal_dcoeff_x", nxdc_host, n_cijk());
-	gpu_manager_t::pass_buf_to_matlab("normal_dcoeff_y", nydc_host, n_cijk());
-	gpu_manager_t::pass_buf_to_matlab("normal_dcoeff_z", nzdc_host, n_cijk());
-	gpu_manager_t::pass_buf_to_matlab("norm_dcoeff", normdc_host, n_cijk());
-#endif
-
-	cudaFree(nxdc_tmp);
-	cudaFree(nydc_tmp);
-	cudaFree(nzdc_tmp);
-	cudaFree(normdc_tmp);
-	nxdc_tmp = nullptr;
-	nydc_tmp = nullptr;
-	nzdc_tmp = nullptr;
-	normdc_tmp = nullptr;
-	delete[] nxdc_host;
-	delete[] nydc_host;
-	delete[] nzdc_host;
-	delete[] normdc_host;
-	nxdc_host = nullptr;
-	nydc_host = nullptr;
-	nzdc_host = nullptr;
-	normdc_host = nullptr;
-}
-
 void grid::Grid::compute_spline_surface_point_normal_norm_dcoeff(void)
 {
 	float* normdc_tmp;
 	cudaMalloc(&normdc_tmp, sizeof(float) * n_cijk());
 	init_array(normdc_tmp, float{ 0 }, n_cijk());
 	cuda_error_check;
-
 
 	// MARK[TO CHECK] parallel_sum
 	float* tmp = (float*)getTempBuf(sizeof(float) * grid::Grid::spline_surface_node->size() / 100);
@@ -5722,7 +5635,199 @@ void grid::Grid::compute_spline_surface_point_normal_norm_dcoeff(void)
 	normdc_host = nullptr;
 }
 
+void grid::Grid::compute_spline_surface_point_normal_dcoeff(void)
+{
+}
+
 void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
+{
+	if (_layer != 0) return;
+
+	float* surface_direction = (float*)_gbuf.surface_normal_direction;
+
+	// MARK[TO CHECK] parallel_sum
+	float* tmp = (float*)getTempBuf(sizeof(float) * grid::Grid::spline_surface_node->size() / 100);
+	cuda_error_check;
+	float count = parallel_sum(_gbuf.surface_normal_direction, tmp, grid::Grid::spline_surface_node->size());
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float direction;
+	if (count > 0)
+	{
+		direction = 1.0f;
+	}
+	else
+	{
+		direction = -1.0f;
+	}
+
+	float print_angle = _opt_print_angle;
+	int modeid = gssmode[0];
+
+	std::cout << "--[TEST] mode id: " << modeid << std::endl;
+
+	// computation
+	float* dc_tmp;
+	cudaMalloc(&dc_tmp, sizeof(float) * n_cijk());
+	init_array(dc_tmp, float{ 0 }, n_cijk());
+	cuda_error_check;
+
+	//int order3 = m_iM * m_iM * m_iM;
+
+	//float* cijk_value = _gbuf.coeffs;
+	//float* knotx_ = _gbuf.KnotSer[0];
+	//float* knoty_ = _gbuf.KnotSer[1];
+	//float* knotz_ = _gbuf.KnotSer[2];
+	//float* rholist = _gbuf.rho_e;
+	//float* rho_diff = _gbuf.g_sens;
+	//int* eidmap = _gbuf.eidmap;
+	//int* eflag = _gbuf.eBitflag;
+
+	//int ereso = _ereso;
+	//float eh = elementLength();
+	//float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, grid::Grid::spline_surface_node->size(), 512);
+
+	auto node_diff = [=] __device__(int node_id) {
+		float pos[3] = { 0.f };
+		for (int i = 0; i < 3; i++)	pos[i] = gpu_SurfacePoints[i][node_id];
+		float direction_tmp = surface_direction[node_id];
+
+		float normal_vector[3] = { 0.f };
+		float normal_dcijk[3] = { 0.f };
+		float norm_dcijk = 0.f;
+		for (int i = 0; i < 3; i++) normal_vector[i] = gpu_surface_normal[i][node_id];
+
+		float normal_vector_norm = norm(normal_vector);
+
+		float up, down, dinner, inner;
+		float val;
+		int i, j, k, ir, it, is, index;
+
+		float NX[m_iM] = { 0.f };
+		float pNX[m_iM] = { 0.f };
+		float NY[m_iM] = { 0.f };
+		float pNY[m_iM] = { 0.f };
+		float NZ[m_iM] = { 0.f };
+		float pNZ[m_iM] = { 0.f };
+
+		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
+		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
+		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
+		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
+
+		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
+		{
+			val = -0.2f;
+		}
+		else
+		{
+			SplineBasisX(pos[0], pNX);
+			SplineBasisY(pos[1], pNY);
+			SplineBasisZ(pos[2], pNZ);
+
+			int count4coeff = 0;
+			//index = i + j * m_im + k * m_im * m_in;
+			for (ir = i - gorder[0]; ir < i; ir++)
+			{
+				for (is = j - gorder[0]; is < j; is++)
+				{
+					for (it = k - gorder[0]; it < k; it++)
+					{
+						val = 0.0f;
+						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
+
+						normal_dcijk[0] = direction * pNX[ir - i + gorder[0]] * NY[is - j + gorder[0]] * NZ[it - k + gorder[0]];
+						normal_dcijk[1] = direction * NX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * NZ[it - k + gorder[0]];
+						normal_dcijk[2] = direction * NX[ir - i + gorder[0]] * NY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+						norm_dcijk = dot(normal_vector, normal_dcijk) / normal_vector_norm;
+
+						up = normal_dcijk[2] * normal_vector_norm - normal_vector[2] * norm_dcijk;
+						down = normal_vector_norm * normal_vector_norm * cosf(print_angle);
+						dinner = up / down;
+
+						inner = normal_vector[2] / normal_vector_norm / cosf(print_angle);
+
+						val = oh(inner, sigmoid_c) * dinner;
+
+						dc_tmp[index] += val;
+
+						// [MARK] TOADD more enum
+						if (modeid == 0)            // p_norm_ss
+						{
+							if (normal_vector[2] < 0)
+							{
+								val = p_norm * pow(inner, p_norm - 1) * dinner;
+							}
+						}
+						else if (modeid == 1)
+						{
+							val = p_norm * pow(inner, p_norm - 1) * dinner;
+						}
+						else if (modeid == 2)       // h_function_ss
+						{
+							if (normal_vector[2] < 0)
+							{
+								val = dh(inner, hfunction_c) * dinner;
+							}
+						}
+						else if (modeid == 3)       // h_function2_ss
+						{
+							val = dh(inner, hfunction_c) * dinner;
+						}
+						else if (modeid == 4)       // overhang_ss
+						{
+							if (normal_vector[2] < 0)
+							{
+								val = doh(inner, sigmoid_c) * dinner;
+							}
+						}
+						else if (modeid == 5)       // overhang2_ss
+						{
+							val = doh(inner, sigmoid_c) * dinner;
+						}
+
+
+						dc_tmp[index] += val;
+						// doesn't make sense
+						//nxdc_tmp[index] += normal_dcijk[0];
+						//nydc_tmp[index] += normal_dcijk[1];
+						//nzdc_tmp[index] += normal_dcijk[2];
+						//normdc_tmp[index] += norm_dcijk;
+						count4coeff++;
+					}
+				}
+			}
+		}
+	};
+
+	traverse_noret << <grid_size, block_size >> > (grid::Grid::spline_surface_node->size(), node_diff);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float* dc_host = new float[n_cijk()];
+	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	// upload to _gbuf.c_sens
+	init_array(_gbuf.ss_sens, float{ 0 }, n_cijk());
+	cudaMemcpy(_gbuf.ss_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	cuda_error_check;
+
+#ifdef ENABLE_MATLAB
+	gpu_manager_t::pass_buf_to_matlab("ss_sens2", dc_host, n_cijk());
+#endif
+
+	cudaFree(dc_tmp);
+	dc_tmp = nullptr;
+	delete[] dc_host;
+	dc_host = nullptr;
+}
+
+
+void grid::Grid::scale_spline_selfsupp_constraint_dcoeff(void)
 {
 
 }
