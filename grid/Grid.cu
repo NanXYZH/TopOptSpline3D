@@ -2959,6 +2959,7 @@ void HierarchyGrid::setMode(Mode mode)
 void HierarchyGrid::setSSMode(GlobalSSMode mode)
 {
 	int modeid = mode;
+	std::cout << "--[TEST] ssmode id: " << modeid << std::endl;
 	_ssmode = mode;
 	Grid::_ssmode = mode;
 	cudaMemcpyToSymbol(gssmode, &modeid, sizeof(int));
@@ -2967,6 +2968,7 @@ void HierarchyGrid::setSSMode(GlobalSSMode mode)
 void HierarchyGrid::setDripMode(GlobalDripMode mode)
 {
 	int modeid = mode;
+	std::cout << "--[TEST] dripmode id: " << modeid << std::endl;
 	_dripmode = mode;
 	Grid::_dripmode = mode;
 	cudaMemcpyToSymbol(gdripmode, &modeid, sizeof(int));
@@ -2975,12 +2977,14 @@ void HierarchyGrid::setDripMode(GlobalDripMode mode)
 void HierarchyGrid::setPrintAngle(float default_angle_ratio, float opt_angle_ratio)
 {
 	float sdefault = default_angle_ratio * M_PI;
+	std::cout << "--[TEST] angle default: " << sdefault << std::endl;
 	_setting.default_print_angle = sdefault;
 	Grid::_default_print_angle = sdefault;
 	cudaMemcpyToSymbol(gdefaultPrintAngle, &sdefault, sizeof(float));
 	cuda_error_check;
 
 	float sopt = opt_angle_ratio * M_PI;
+	std::cout << "--[TEST] angle opt: " << sopt << std::endl;
 	_setting.opt_print_angle = sopt;
 	Grid::_opt_print_angle = sopt;
 	cudaMemcpyToSymbol(goptPrintAngle, &sopt, sizeof(float));
@@ -5274,7 +5278,7 @@ void grid::Grid::compute_spline_surface_point_normal(void)
 	size_t grid_dim, block_dim;
 	int n = spline_surface_node->size();
 
-	std::cout << "--[TEST] number of surface node: " << spline_surface_node->size() << _num_surface_points << std::endl;
+	//std::cout << "--[TEST] number of surface node: " << spline_surface_node->size() << "," << _num_surface_points << std::endl;
 
 	make_kernel_param(&grid_dim, &block_dim, n, 256);
 	traverse_noret << <grid_dim, block_dim >> > (n, calc_normal);
@@ -5405,9 +5409,9 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 			for (int i = 0; i < 3; i++)	gpu_surface_normal[i][node_id] = direction_tmp * normal[i];
 			return;
 		};
-		size_t grid_dim, block_dim;
-		int n = grid::Grid::spline_surface_node->size();
-		make_kernel_param(&grid_dim, &block_dim, n, 256);
+		//size_t grid_dim, block_dim;
+		//int n = grid::Grid::spline_surface_node->size();
+		//make_kernel_param(&grid_dim, &block_dim, n, 256);
 		traverse_noret << <grid_dim, block_dim >> > (n, calc_normal);
 		cudaDeviceSynchronize();
 		cuda_error_check;
@@ -5608,6 +5612,7 @@ void grid::Grid::compute_spline_surface_point_normal_norm_dcoeff(void)
 				}
 			}
 		}
+		return;
 	};
 
 	size_t grid_dim, block_dim;
@@ -5663,9 +5668,12 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 	}
 
 	float print_angle = _opt_print_angle;
-	int modeid = gssmode[0];
+	int modeid = _ssmode;
+	float func_para = sigmoid_c;
+	float _p_norm = p_norm;
 
 	std::cout << "--[TEST] mode id: " << modeid << std::endl;
+	std::cout << "--[TEST] function para: " << func_para << std::endl;
 
 	// computation
 	float* dc_tmp;
@@ -5673,28 +5681,10 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 	init_array(dc_tmp, float{ 0 }, n_cijk());
 	cuda_error_check;
 
-	//int order3 = m_iM * m_iM * m_iM;
-
-	//float* cijk_value = _gbuf.coeffs;
-	//float* knotx_ = _gbuf.KnotSer[0];
-	//float* knoty_ = _gbuf.KnotSer[1];
-	//float* knotz_ = _gbuf.KnotSer[2];
-	//float* rholist = _gbuf.rho_e;
-	//float* rho_diff = _gbuf.g_sens;
-	//int* eidmap = _gbuf.eidmap;
-	//int* eflag = _gbuf.eBitflag;
-
-	//int ereso = _ereso;
-	//float eh = elementLength();
-	//float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
-
-	size_t grid_size, block_size;
-	make_kernel_param(&grid_size, &block_size, grid::Grid::spline_surface_node->size(), 512);
-
-	auto node_diff = [=] __device__(int node_id) {
-		float pos[3] = { 0.f };
-		for (int i = 0; i < 3; i++)	pos[i] = gpu_SurfacePoints[i][node_id];
-		float direction_tmp = surface_direction[node_id];
+	auto calc_node_value = [=] __device__(int node_id)
+	{
+		float p[3] = { 0.f };
+		for (int i = 0; i < 3; i++)	p[i] = gpu_SurfacePoints[i][node_id];
 
 		float normal_vector[3] = { 0.f };
 		float normal_dcijk[3] = { 0.f };
@@ -5703,8 +5693,6 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 
 		float normal_vector_norm = norm(normal_vector);
 
-		float up, down, dinner, inner;
-		float val;
 		int i, j, k, ir, it, is, index;
 
 		float NX[m_iM] = { 0.f };
@@ -5714,97 +5702,92 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 		float NZ[m_iM] = { 0.f };
 		float pNZ[m_iM] = { 0.f };
 
-		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
-		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
-		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
-		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
+		i = (int)((p[0] - gnBoundMin[0]) / gnstep[0]) + m_iM;
+		j = (int)((p[1] - gnBoundMin[1]) / gnstep[1]) + m_iM;
+		k = (int)((p[2] - gnBoundMin[2]) / gnstep[2]) + m_iM;
 
-		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
+		if ((i < m_iM) || (i > gnbasis[0]) || (j < m_iM) || (j > gnbasis[1]) || (k < m_iM) || (k > gnbasis[2]))
 		{
-			val = -0.2f;
+			normal_dcijk[0] = 0.0f;
+			normal_dcijk[1] = 0.0f;
+			normal_dcijk[2] = 0.0f;
 		}
 		else
 		{
-			SplineBasisX(pos[0], pNX);
-			SplineBasisY(pos[1], pNY);
-			SplineBasisZ(pos[2], pNZ);
+			SplineBasisDeriX(p[0], 1, NX);  // 1 means the original function value
+			SplineBasisDeriX(p[0], 2, pNX); // 2 means the first order derivative value
 
-			int count4coeff = 0;
-			//index = i + j * m_im + k * m_im * m_in;
-			for (ir = i - gorder[0]; ir < i; ir++)
+			SplineBasisDeriY(p[1], 1, NY);
+			SplineBasisDeriY(p[1], 2, pNY);
+
+			SplineBasisDeriZ(p[2], 1, NZ);
+			SplineBasisDeriZ(p[2], 2, pNZ);
+
+			for (ir = i - m_iM; ir < i; ir++)
 			{
-				for (is = j - gorder[0]; is < j; is++)
+				for (is = j - m_iM; is < j; is++)
 				{
-					for (it = k - gorder[0]; it < k; it++)
+					for (it = k - m_iM; it < k; it++)
 					{
-						val = 0.0f;
+						float val = 0.f;
+						float up, down, dinner, inner;
 						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
-
-						normal_dcijk[0] = direction * pNX[ir - i + gorder[0]] * NY[is - j + gorder[0]] * NZ[it - k + gorder[0]];
-						normal_dcijk[1] = direction * NX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * NZ[it - k + gorder[0]];
-						normal_dcijk[2] = direction * NX[ir - i + gorder[0]] * NY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+						normal_dcijk[0] = direction * pNX[ir - i + m_iM] * NY[is - j + m_iM] * NZ[it - k + m_iM];
+						normal_dcijk[1] = direction * NX[ir - i + m_iM] * pNY[is - j + m_iM] * NZ[it - k + m_iM];
+						normal_dcijk[2] = direction * NX[ir - i + m_iM] * NY[is - j + m_iM] * pNZ[it - k + m_iM];
 						norm_dcijk = dot(normal_vector, normal_dcijk) / normal_vector_norm;
 
 						up = normal_dcijk[2] * normal_vector_norm - normal_vector[2] * norm_dcijk;
 						down = normal_vector_norm * normal_vector_norm * cosf(print_angle);
 						dinner = up / down;
-
 						inner = normal_vector[2] / normal_vector_norm / cosf(print_angle);
 
-						val = oh(inner, sigmoid_c) * dinner;
-
-						dc_tmp[index] += val;
-
-						// [MARK] TOADD more enum
 						if (modeid == 0)            // p_norm_ss
 						{
 							if (normal_vector[2] < 0)
 							{
-								val = p_norm * pow(inner, p_norm - 1) * dinner;
+								val = _p_norm * pow(inner, _p_norm - 1) * dinner;
 							}
 						}
 						else if (modeid == 1)
 						{
-							val = p_norm * pow(inner, p_norm - 1) * dinner;
+							val = _p_norm * pow(inner, _p_norm - 1) * dinner;
 						}
 						else if (modeid == 2)       // h_function_ss
 						{
 							if (normal_vector[2] < 0)
 							{
-								val = dh(inner, hfunction_c) * dinner;
+								val = dh(inner, func_para) * dinner;
 							}
 						}
 						else if (modeid == 3)       // h_function2_ss
 						{
-							val = dh(inner, hfunction_c) * dinner;
+							val = dh(inner, func_para) * dinner;
 						}
 						else if (modeid == 4)       // overhang_ss
 						{
 							if (normal_vector[2] < 0)
 							{
-								val = doh(inner, sigmoid_c) * dinner;
+								val = doh(inner, func_para) * dinner;
 							}
 						}
 						else if (modeid == 5)       // overhang2_ss
 						{
-							val = doh(inner, sigmoid_c) * dinner;
+							val = doh(inner, func_para) * dinner;
 						}
 
-
 						dc_tmp[index] += val;
-						// doesn't make sense
-						//nxdc_tmp[index] += normal_dcijk[0];
-						//nydc_tmp[index] += normal_dcijk[1];
-						//nzdc_tmp[index] += normal_dcijk[2];
-						//normdc_tmp[index] += norm_dcijk;
-						count4coeff++;
 					}
 				}
 			}
 		}
+		return;
 	};
 
-	traverse_noret << <grid_size, block_size >> > (grid::Grid::spline_surface_node->size(), node_diff);
+	size_t grid_dim, block_dim;
+	int n = grid::Grid::spline_surface_node->size();
+	make_kernel_param(&grid_dim, &block_dim, n, 256);
+	traverse_noret << <grid_dim, block_dim >> > (n, calc_node_value);
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
@@ -5826,8 +5809,45 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 	dc_host = nullptr;
 }
 
-
-void grid::Grid::scale_spline_selfsupp_constraint_dcoeff(void)
+float grid::Grid::count_surface_points(void)
 {
+	auto calc_node = [=] __device__(int node_id) {
+		float p[3];
+		float s = 0.f;
+		for (int i = 0; i < 3; i++)		p[i] = gpu_SurfacePoints[i][node_id];
+		float normal_vector[3];
+		for (int i = 0; i < 3; i++)		normal_vector[i] = gpu_surface_normal[i][node_id];
 
+		if (normal_vector[2] < 0)
+		{
+			s = 1;
+		}
+		else
+		{
+			s = 0;
+		}
+		return s;
+	};
+
+	size_t grid_dim, block_dim;
+	int n = grid::Grid::spline_surface_node->size();
+	make_kernel_param(&grid_dim, &block_dim, n, 256);
+	traverse << <grid_dim, block_dim >> > ((float*)_gbuf.surface_point_buf, n, calc_node);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n / 100);
+	float count = parallel_sum(_gbuf.surface_point_buf, sum, n);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	return count;
 }
+
+void grid::Grid::scaleVector(float* p_data, size_t len, float scale)
+{
+	array_t<float> vec_map(p_data, len);
+	vec_map *= scale;
+	cuda_error_check;
+}
+
+

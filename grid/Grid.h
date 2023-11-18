@@ -170,8 +170,8 @@ namespace grid {
 		p_norm2_drip,    // all
 		h_function_drip, // only nz < 0
 		h_function2_drip,// all
-		overhang2_drip,  // only nz < 0
-		overhang_drip    // all
+		overhang_drip,   // only nz < 0
+		overhang2_drip   // all
 	};
 
 	template<typename dt = double, int N = 3>
@@ -262,6 +262,7 @@ namespace grid {
 			float* surface_normal_dc[3];            // derivative to coeffs
 			float* surface_normal_norm_dc;      
 
+			float* surface_point_buf;
 			float* ss_value;
 			float* drip_value;
 			float* ss_sens;
@@ -621,8 +622,10 @@ namespace grid {
 		void compute_selfsupp_constraint_virtual(void);
 
 		void compute_spline_selfsupp_constraint_dcoeff(void);
+		float count_surface_points(void);
+		void scaleVector(float* p_data, size_t len, float scale);
 		void scale_spline_selfsupp_constraint_dcoeff(void);
-
+		
 		//[MARK] : may gather them -- > not use
 		void compute_spline_surface_point_normal_dcoeff(void);
 		void compute_spline_surface_point_normal_norm_dcoeff(void);
@@ -672,6 +675,8 @@ namespace grid {
 		void sens2matlab(const std::string& nam);
 
 		void csens2matlab(const std::string& nam);
+		void SSsens2matlab(const std::string& nam);
+		void Dripsens2matlab(const std::string& nam);
 
 		void v2v2matlab(const std::string& nam);
 

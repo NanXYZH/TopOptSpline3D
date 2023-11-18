@@ -2383,6 +2383,7 @@ size_t grid::Grid::build(
 		_gbuf.ss_sens = (float*)gm.add_buf(_name + " ss_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 		_gbuf.drip_sens = (float*)gm.add_buf(_name + " drip_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 
+		_gbuf.surface_point_buf = (float*)gm.add_buf(_name + " ss_buf ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.ss_value = (float*)gm.add_buf(_name + " ss_value ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.drip_value = (float*)gm.add_buf(_name + " drip_value ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
 
@@ -2872,6 +2873,16 @@ void Grid::sens2matlab(const std::string& nam)
 void Grid::csens2matlab(const std::string& nam)
 {
 	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.c_sens, n_cijk());
+}
+
+void Grid::SSsens2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.ss_sens, n_cijk());
+}
+
+void Grid::Dripsens2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.drip_sens, n_cijk());
 }
 
 void Grid::v2vcoarse2matlab(const std::string& nam)
@@ -3459,4 +3470,14 @@ void HierarchyGrid::update_stencil(void)
 	}
 }
 
-
+void grid::Grid::scale_spline_selfsupp_constraint_dcoeff(void)
+{
+	float count = spline_surface_node->size();
+	int modeid = _ssmode;
+	if (modeid % 2 == 0) // only nz < 0
+	{
+		count = count_surface_points();
+	}
+	scaleVector(getSSSens(), spline_surface_node->size(), 1 / count);
+	SSsens2matlab("ss_sens3");
+}

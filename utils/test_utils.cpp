@@ -905,12 +905,15 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	grids[0]->uploadSymbol2device();
 	
 	grids[0]->compute_spline_surface_point_normal();
-	grids[0]->correct_spline_surface_point_normal_direction();
+	grids[0]->correct_spline_surface_point_normal_direction(); // mark false
 	grids[0]->compute_selfsupp_constraint();
 	grids[0]->compute_selfsupp_constraint_virtual();
 
+	grids[0]->compute_spline_surface_point_normal_norm_dcoeff();
+
 	grids[0]->compute_spline_selfsupp_constraint_dcoeff();
 	// * 1 / num_constraint
+	grids[0]->scale_spline_selfsupp_constraint_dcoeff();
 
 	// end
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
