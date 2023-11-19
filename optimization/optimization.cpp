@@ -785,13 +785,13 @@ void initDensities(double rho)
 
 void initCoeffs(double coeff)
 {
-#if 0
+#if 1
 	grids[0]->init_coeff(coeff);
 #else
 	float* coeff_noise = new float[grids[0]->n_cijk()];
 	for (int i = 0; i < grids[0]->n_cijk(); i++)
 	{
-		coeff_noise[i] = coeff - static_cast<float>(rand() % 101) / 1000.0f; // 生成0到0.1之间的随机数
+		coeff_noise[i] = coeff - static_cast<float>(rand() % 101) / 10000.0f; // 生成0到0.01之间的随机数
 	}
 	grids[0]->init_coefflist(coeff_noise);
 	delete[] coeff_noise;

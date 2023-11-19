@@ -1756,6 +1756,26 @@ double HierarchyGrid::elementLength(void)
 	return _gridlayer[0]->elementLength();
 }
 
+bool HierarchyGrid::areALLElementsEqual(const std::vector<float>& vec) {
+	if (vec.empty())
+	{
+		return true;
+	}
+
+	auto it = std::adjacent_find(vec.begin(), vec.end(), std::not_equal_to<float>());
+
+	return it == vec.end();
+}
+
+bool HierarchyGrid::areALLCoeffsEqual(void)
+{
+	int coeff_size = _gridlayer[0]->n_im * _gridlayer[0]->n_in * _gridlayer[0]->n_il;
+	std::vector<float> coeffhost(coeff_size);
+	gpu_manager_t::download_buf(coeffhost.data(), _gridlayer[0]->_gbuf.coeffs, sizeof(float) * coeff_size);
+
+	return areALLElementsEqual(coeffhost);
+}
+
 double HierarchyGrid::v_cycle(int pre_relax, int post_relax)
 {
 	int depth = n_grid() - 1;

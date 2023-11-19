@@ -899,23 +899,31 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 #endif
 	// for surface points test
 
-	grids[0]->generate_spline_surface_nodes();
-	grids[0]->uploadSurfacePoints();
-	grids[0]->uploadSurfacePointsSymbol();
-	grids[0]->uploadSymbol2device();
-	
-	grids[0]->compute_spline_surface_point_normal();
-	grids[0]->correct_spline_surface_point_normal_direction(); // mark false
-	grids[0]->compute_selfsupp_flag_actual();
-	grids[0]->compute_selfsupp_flag_virtual();
+	if (grids.areALLCoeffsEqual())
+	{
+		std::cout << "-- [Same Coeff cannot extra surface points] --" << std::endl;
+	}
+	else
+	{
+		std::cout << "-- [Deal with surface points] --" << std::endl;
+		grids[0]->generate_spline_surface_nodes();
+		grids[0]->uploadSurfacePoints();
+		grids[0]->uploadSurfacePointsSymbol();
+		grids[0]->uploadSymbol2device();
 
-	grids[0]->compute_spline_selfsupp_constraint();
-	float ss_value = grids[0]->global_selfsupp_constraint();
-	std::cout << "--[TEST] SS value: " << ss_value << std::endl;
+		grids[0]->compute_spline_surface_point_normal();
+		grids[0]->correct_spline_surface_point_normal_direction(); // mark false
+		grids[0]->compute_selfsupp_flag_actual();
+		grids[0]->compute_selfsupp_flag_virtual();
 
-	grids[0]->compute_spline_selfsupp_constraint_dcoeff();
-	// * 1 / num_constraint
-	grids[0]->scale_spline_selfsupp_constraint_dcoeff();
+		grids[0]->compute_spline_selfsupp_constraint();
+		float ss_value = grids[0]->global_selfsupp_constraint();
+		std::cout << "--[TEST] SS value: " << ss_value << std::endl;
+
+		grids[0]->compute_spline_selfsupp_constraint_dcoeff();
+		// * 1 / num_constraint
+		grids[0]->scale_spline_selfsupp_constraint_dcoeff();
+	}
 
 	// end
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
@@ -929,13 +937,24 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 	std::vector<float> tmodipm;
 
+	int n_constraint = 1;
 	// MMA
-	MMA::mma_t mma(grids[0]->n_cijk(), 1);
+	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
 	float volScale = 1e3;
 	float sensScale = 1e5;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
+
+
+	gv::gVector fdiff(grids[0]->n_cijk());
+	gv::gVector gval(n_constraint);
+	std::vector<gv::gVector> gdiffval(n_constraint);
+	std::vector<float*> gdiff(n_constraint);
+	for (int i = 0; i < n_constraint; i++) {
+		gdiffval[i] = gv::gVector(grids[0]->n_cijk());
+		gdiff[i] = gdiffval[i].data();
+	}
 
 	while (itn++ < 100) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
@@ -957,10 +976,10 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		// update numeric stencil after density changed
 		update_stencil();
 
-		// update surface points in CPU
-		grids[0]->generate_spline_surface_nodes();
-		// CPU 2 GPU
-		grids[0]->uploadSurfacePoints();
+		//// update surface points in CPU
+		//grids[0]->generate_spline_surface_nodes();
+		//// CPU 2 GPU
+		//grids[0]->uploadSurfacePoints();
 
 		// solve displacement 
 		//double c = grids.solveFEM();
@@ -985,11 +1004,19 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		gpu_manager_t::pass_dev_buf_to_matlab("csens", grids[0]->getCSens(), grids[0]->n_cijk());
 
-		// MARK[TODO] dv not updated !! (OK)
-		mma.update(grids[0]->getCSens(), &dv.data(), v.data());
+		// compute difference of current g
+		for (int i = 0; i < n_constraint; i++) {
+			gdiffval[i] = dv;
+		}
 
-		//// update coeff
-		//updateCoeff(Vgoal);
+		// compute current constrain value 
+		for (int i = 0; i < n_constraint; i++) {
+			gval[i] = v[0];
+		}
+
+		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
+		//mma.update(grids[0]->getCSens(), &dv.data(), v.data());
+
 	}
 
 	printf("\n=   finished   =\n");

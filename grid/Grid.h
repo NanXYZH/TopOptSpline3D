@@ -942,6 +942,10 @@ namespace grid {
 
 		double elementLength(void);
 
+		bool areALLElementsEqual(const std::vector<float>& vec);
+
+		bool areALLCoeffsEqual(void);
+
 		~HierarchyGrid() {
 			if (!_gridlayer.empty()) {
 				for (int i = 0; i < _gridlayer.size(); i++) {

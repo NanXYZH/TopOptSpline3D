@@ -3813,7 +3813,7 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 		nodex[id] = pos[0];
 		nodey[id] = pos[1];
 		nodez[id] = pos[2];
-		node_value[id] = Heaviside(val - 0.45);
+		node_value[id] = Heaviside(val - 0.5);
 		//node_value[id] = cosf(2 * M_PI * t * pos[0]) + cosf(2 * M_PI * t * pos[1]) + cosf(2 * M_PI * t * pos[2]) + 0.1; // to verify the Marching cube
 	};
 
@@ -5370,7 +5370,7 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 		}
 
 		s = Heaviside(val);
-		if (s < 0.45)   // s < 0.5 --> void
+		if (s < 0.5)   // s < 0.5 --> void
 		{
 			s = 1;
 		}

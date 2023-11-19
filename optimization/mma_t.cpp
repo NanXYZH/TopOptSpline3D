@@ -168,7 +168,7 @@ namespace MMA {
 		// test 1-dim
 		if (1)
 		{
-			printf(" MMA TESTING of 1 dim with 1 constrain \n");
+			printf("[CASE 1] MMA TESTING of 1 dim with 1 constrain \n");
 			auto f = [](Scalar x) {
 				return x * exp(-x * x) + sin(x);
 			};
@@ -212,10 +212,174 @@ namespace MMA {
 			}
 		}
 
+		// re write test 1-dim
+		if (1)
+		{
+			printf("[CASE 2] MMA TESTING of 1 dim with 1 constrain \n");
+			auto f = [](Scalar x) {
+				return x * exp(-x * x) + sin(x);
+			};
+			auto df = [](Scalar x) {
+				return exp(-x * x) * (1 - 2 * x * x) + cos(x);
+			};
+			auto g = [](Scalar x) {
+				return (x - 1.5f) * (x - 1.5f) - 1;
+			};
+			auto dg = [](Scalar x) {
+				return 2 * x - 3;
+			};
+			mma_t solver(1, 1, 1e-3);
+			solver.init(0.5, 2);
+			auto& xlist = solver.get_x();
+			bool converged = false;
+
+			int n_var = 1;
+			int n_con = 1;
+			gv::gVector fdiff(n_var);
+			gv::gVector gval(n_con);
+			std::vector<gv::gVector> gdiffval(n_con);
+			std::vector<Scalar*> gdiff(n_con);
+			//gv::gVector dgv(1);
+			//gdiff[0] = dgv.data();
+
+			for (int i = 0; i < n_con; i++)
+			{
+				gdiffval[i] = gv::gVector(n_var);
+				gdiff[i] = gdiffval[i].data();
+			}
+
+			while (!converged) {
+
+				Scalar new_x = xlist[0];
+
+				gv::gVector dgv(n_var);
+
+				printf("current x     = %f\n", new_x);
+
+				printf("        df(x) = %f\n", df(new_x));
+
+				printf("        g(x)  = %f\n", g(new_x));
+
+				printf("        dg(x) = %f\n", dg(new_x));
+
+
+				dgv[0] = dg(new_x);
+				fdiff[0] = df(new_x);
+				for (int i = 0; i < n_con; i++)
+				{
+					gval[i] = g(new_x);
+					gdiffval[i] = dgv;
+					//dgv[0] = dg(new_x);
+				}
+
+				converged = solver.update(fdiff.data(), gdiff.data(), gval.data());
+			}
+		}
+
 		// test 2-dim
 		if (1)
 		{
-			printf(" MMA TESTING of 2 dim with 4 constrains \n");
+			printf("[CASE 3] MMA TESTING of 2 dim with 4 constrains \n");
+			auto f = [](Scalar x, Scalar y) {
+				return x / 2 + y * sqrt(3) / 2 + exp(10 * pow(x - y, 2));
+			};
+			auto df = [](Scalar x, Scalar y) {
+				std::vector<Scalar> ret;
+				ret.push_back(0.5 + 20 * (x - y) * exp(10 * pow(x - y, 2)));
+				ret.push_back(sqrt(3) / 2 + 20 * (y - x) * exp(10 * pow(x - y, 2)));
+				return ret;
+			};
+			auto g = [](Scalar x, Scalar y) {
+				std::vector<Scalar> ret;
+				ret.push_back(x * x + y * y - 1);
+				ret.push_back(x * x - 3. / 4);
+				ret.push_back(y * y - 3. / 4);
+				ret.push_back(pow(x + y, 2) - 1);
+				return ret;
+			};
+			auto dg = [](Scalar x, Scalar y) {
+				std::vector<std::vector<Scalar>> ret;
+				ret.resize(4);
+				ret[0].push_back(2 * x);
+				ret[0].push_back(2 * y);
+
+				ret[1].push_back(2 * x);
+				ret[1].push_back(0);
+
+				ret[2].push_back(0);
+				ret[2].push_back(2 * y);
+
+				ret[3].push_back(2 * (x + y));
+				ret[3].push_back(2 * (x + y));
+				return ret;
+			};
+
+			mma_t solver(2, 4);
+
+			//solver.set_constrain_amplifier(1e3, 1e2);
+
+			solver.init(-1, 1);
+
+			gv::gVector fdiff(2);
+			gv::gVector gval(4);
+			std::vector<gv::gVector> gdiffval(4);
+			std::vector<Scalar*> gdiff(4);
+			for (int i = 0; i < 4; i++) {
+				gdiffval[i] = gv::gVector(2);
+				gdiff[i] = gdiffval[i].data();
+			}
+
+			gv::gVector cur_x(2);
+
+			bool converged = false;
+			while (!converged) {
+				cur_x = solver.get_x();
+
+				printf("current : \n");
+				printf("x = (%f, %f)\n", Scalar(cur_x[0]), Scalar(cur_x[1]));
+
+				// compute difference of current df
+				auto diff_f = df(cur_x[0], cur_x[1]);
+				for (int i = 0; i < diff_f.size(); i++) {
+					fdiff[i] = diff_f[i];
+				}
+				printf("Df = (%f, %f)\n", diff_f[0], diff_f[1]);
+
+				// compute difference of current g
+				auto diff_g = dg(cur_x[0], cur_x[1]);
+				for (int i = 0; i < diff_g.size(); i++) {
+					gv::gVector tmp(2);
+					tmp[0] = diff_g[i][0];
+					tmp[1] = diff_g[i][1];
+					gdiffval[i] = tmp;
+				}
+
+				printf("Dg = [(%f, %f),\n", diff_g[0][0], diff_g[0][1]);
+				printf("      (%f, %f),\n", diff_g[1][0], diff_g[1][1]);
+				printf("      (%f, %f),\n", diff_g[2][0], diff_g[2][1]);
+				printf("      (%f, %f)]\n", diff_g[3][0], diff_g[3][1]);
+
+				// compute current constrain value 
+				auto gv = g(cur_x[0], cur_x[1]);
+				for (int i = 0; i < gv.size(); i++) {
+					gval[i] = gv[i];
+				}
+
+				printf("g = [ %f,\n", gv[0]);
+				printf("      %f,\n", gv[1]);
+				printf("      %f,\n", gv[2]);
+				printf("      %f ]\n", gv[3]);
+
+				if (solver.update(fdiff.data(), gdiff.data(), gval.data())) {
+					break;
+				}
+			}
+		}
+	
+		// test 2-dim
+		if (1)
+		{
+			printf("[CASE 4] MMA TESTING of 2 dim with 4 constrains \n");
 			auto f = [](Scalar x, Scalar y) {
 				return x / 2 + y * sqrt(3) / 2 + exp(10 * pow(x - y, 2));
 			};

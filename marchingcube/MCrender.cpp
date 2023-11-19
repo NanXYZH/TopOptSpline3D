@@ -160,8 +160,8 @@ void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, s
 	std::cout << "(" << nX << ", " << nY << ", " << nZ << ") " << nX * nY * nZ << std::endl;
 	std::cout << mcPoints_inner_val.size() << std::endl;
 	std::cout << bg_node->size() << std::endl;
-	delete[] Triangles;	  //first free the previous allocated memory
-	Triangles = nullptr;
+	//delete[] Triangles;	  //first free the previous allocated memory
+	//Triangles = nullptr;
 	Triangles = MarchingCubes(nX - 1, nY - 1, nZ - 1, 1.0, 1.0, 1.0, minValuePotential, mcPoints, numOfTriangles);
 	//std::cout << "Marching cube test \n" << "Surface node number:" << mcPoints.size() << std::endl;
 	int num = 0;
