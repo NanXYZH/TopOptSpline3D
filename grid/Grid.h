@@ -618,9 +618,11 @@ namespace grid {
 		// constraint
 		void compute_spline_surface_point_normal(void);
 		void correct_spline_surface_point_normal_direction(void);
-		void compute_selfsupp_constraint(void);
-		void compute_selfsupp_constraint_virtual(void);
+		void compute_selfsupp_flag_actual(void);
+		void compute_selfsupp_flag_virtual(void);
 
+		void compute_spline_selfsupp_constraint(void);
+		float global_selfsupp_constraint(void);
 		void compute_spline_selfsupp_constraint_dcoeff(void);
 		float count_surface_points(void);
 		void scaleVector(float* p_data, size_t len, float scale);
@@ -688,6 +690,7 @@ namespace grid {
 		int n_valid_elements(void) { return n_elements; }
 		int n_rho(void) { return n_gselements; }
 		int n_cijk(void) { return n_im * n_in * n_il; }
+		int n_surf_points(void) { return _num_surface_points; }
 		double v3norm(double* v[3]);
 
 		void v3_create(double* dstv[3]);

@@ -3478,6 +3478,7 @@ void grid::Grid::scale_spline_selfsupp_constraint_dcoeff(void)
 	{
 		count = count_surface_points();
 	}
+	std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
 	scaleVector(getSSSens(), spline_surface_node->size(), 1 / count);
 	SSsens2matlab("ss_sens3");
 }

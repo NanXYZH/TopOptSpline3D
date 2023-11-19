@@ -906,10 +906,12 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	
 	grids[0]->compute_spline_surface_point_normal();
 	grids[0]->correct_spline_surface_point_normal_direction(); // mark false
-	grids[0]->compute_selfsupp_constraint();
-	grids[0]->compute_selfsupp_constraint_virtual();
+	grids[0]->compute_selfsupp_flag_actual();
+	grids[0]->compute_selfsupp_flag_virtual();
 
-	grids[0]->compute_spline_surface_point_normal_norm_dcoeff();
+	grids[0]->compute_spline_selfsupp_constraint();
+	float ss_value = grids[0]->global_selfsupp_constraint();
+	std::cout << "--[TEST] SS value: " << ss_value << std::endl;
 
 	grids[0]->compute_spline_selfsupp_constraint_dcoeff();
 	// * 1 / num_constraint
