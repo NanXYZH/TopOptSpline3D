@@ -343,7 +343,7 @@ float* uploadTriangles(const std::vector<float>& vertex_coords, const std::vecto
 
 voxinfo voxelize_mesh(
 	const std::vector<float>& vertex_coords, const std::vector<int>& triface_ids,
-	int prefered_resolution, std::vector<unsigned int>& solid_bits, int out_resolution[3], float out_box[2][3]
+	int prefered_resolution, std::vector<unsigned int>& solid_bits, int out_resolution[3], float out_box[2][3], float m_box[2][3]
 ) {
 
 	auto vbb = get_point_bb(vertex_coords);
@@ -367,6 +367,8 @@ voxinfo voxelize_mesh(
 		out_resolution[i] = reso;
 		out_box[0][i] = bcube.min[i];
 		out_box[1][i] = bcube.max[i];
+		m_box[0][i] = vbb.first[i];
+		m_box[1][i] = vbb.second[i];
 	}
 
 	size_t vtable_size = static_cast<size_t>(
@@ -409,8 +411,9 @@ void hierarchy_voxelize_mesh(
 ) {
 	int fine_reso[3];
 	float fine_box[2][3];
+	float init_box[2][3];
 	std::vector<unsigned int> fine_bits;
-	voxelize_mesh(vertex_coords, triface_ids, prefered_resolution, fine_bits, fine_reso, fine_box);
+	voxelize_mesh(vertex_coords, triface_ids, prefered_resolution, fine_bits, fine_reso, fine_box, init_box);
 	solid_bits.emplace_back(fine_bits);
 	out_resolutions.push_back({ fine_reso[0], fine_reso[1], fine_reso[2] });
 	out_boxs.emplace_back(

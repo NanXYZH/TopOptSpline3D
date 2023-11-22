@@ -704,7 +704,7 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 	// here set the lower and upper bound of design variables
 	mma.init(params.min_rho, 1);
 	float volScale = 1e3;
-	float sensScale = 1e5;
+	float sensScale = 1e-1;
 	gv::gVector dv(grids[0]->n_gselements, volScale / grids[0]->n_gselements);
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -732,7 +732,7 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 			rel_res = grids.v_cycle(5, 5);
 		}
 		double c = grids[0]->compliance();
-		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
+		printf("-- c = %6.4e  v = %4.3lf  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
 		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
 		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
@@ -946,7 +946,6 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
-
 	gv::gVector fdiff(grids[0]->n_cijk());
 	gv::gVector gval(n_constraint);
 	std::vector<gv::gVector> gdiffval(n_constraint);
@@ -992,7 +991,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		grids.writeDisplacement(grids.getPath("ulast"));
 
-		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
+		printf("-- c = %6.4e  v = %4.3lf  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
 		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
 		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
@@ -1001,12 +1000,22 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		computeSensitivity();
 
 		scaleVector(grids[0]->getCSens(), grids[0]->n_cijk(), sensScale);
+		//scaleVector(grids[0]->getVolSens(), grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
+		initVolSens(1);
+		gpu_manager_t::pass_dev_buf_to_matlab("volsens11", grids[0]->getVolSens(), grids[0]->n_cijk());
+		scaleVector(grids[0]->getVolSens(), grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 
 		gpu_manager_t::pass_dev_buf_to_matlab("csens", grids[0]->getCSens(), grids[0]->n_cijk());
+		gpu_manager_t::pass_dev_buf_to_matlab("volsens", grids[0]->getVolSens(), grids[0]->n_cijk());
+
+		//Eigen::Matrix<float, -1, 1> mat_buf;
+		//mat_buf.resize(grids[0]->n_cijk(), 1);
+		//download_buf(mat_buf.data(), dev_ptr, grids[0]->n_cijk() * sizeof(float));
 
 		// compute difference of current g
 		for (int i = 0; i < n_constraint; i++) {
-			gdiffval[i] = dv;
+			//gdiffval[i] = dv;
+			gdiff[i] = grids[0]->getVolSens();
 		}
 
 		// compute current constrain value 

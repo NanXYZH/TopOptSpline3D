@@ -10,7 +10,7 @@
 
 voxinfo voxelize_mesh(
 	const std::vector<float>& vertex_coords, const std::vector<int>& triface_ids,
-	int prefered_resolution, std::vector<unsigned int>& solid_bits, int out_resolution[3], float out_box[2][3]
+	int prefered_resolution, std::vector<unsigned int>& solid_bits, int out_resolution[3], float out_box[2][3], float m_box[2][3]
 );
 
 void hierarchy_voxelize_mesh(

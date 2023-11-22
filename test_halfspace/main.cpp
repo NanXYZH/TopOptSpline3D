@@ -50,7 +50,6 @@ int main()
 	int x = 10;
 	int y = 20;
 
-
 	x = 11;
 	y = 21;
 	// 按值捕获x和y

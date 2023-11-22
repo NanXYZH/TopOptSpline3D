@@ -159,6 +159,9 @@ void computeSensitivity(void) {
 	// rho_diff 2 coeff_diff
 	grids[0]->ddensity2dcoeff_update();
 
+	// vol: rho_diff 2 coeff_diff
+	grids[0]->dvol2dcoeff();
+
 	cudaMemGetInfo(&free_mem, &total_mem);
 	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
 

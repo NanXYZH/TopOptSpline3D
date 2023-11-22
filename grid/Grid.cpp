@@ -673,8 +673,9 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 
 	int out_reso[3];
 	float out_box[2][3];
+	float m_box[2][3];
 
-	auto voxInfo = voxelize_mesh(pcoords, facevertices, _setting.prefer_reso, solid_bit, out_reso, out_box);
+	auto voxInfo = voxelize_mesh(pcoords, facevertices, _setting.prefer_reso, solid_bit, out_reso, out_box, m_box);
 	//write_obj_cubes(solid_bit.data(), voxInfo, "voxels.obj");
 
 #if 1
@@ -947,6 +948,7 @@ void grid::HierarchyGrid::genFromMesh(const std::vector<float>& pcoords, const s
 
 		for (int i = 0; i < 6; i++) {
 			(&grd->_box[0][0])[i] = (&out_box[0][0])[i];
+			(&grd->_mbox[0][0])[i] = (&m_box[0][0])[i];
 		}
 
 		grd->build(get_gmem(), vrtsatlist[i], elesatlist[i], finer, resolist[i] + 1, i, nv, ne, _setting.min_coeff, _setting.max_coeff, v2e, v2vfine, v2vcoarse, v2v, v2vfineclist, vbitflag, ebitflag);
@@ -2487,6 +2489,7 @@ size_t grid::Grid::build(
 	if (_layer == 0) {
 		_gbuf.g_sens = (float*)gm.add_buf(_name + " g_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		_gbuf.c_sens = (float*)gm.add_buf(_name + " c_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		_gbuf.vol_sens = (float*)gm.add_buf(_name + " vol_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 		//_gbuf.de2dc = (float*)gm.add_buf(_name + " de2dc ", sizeof(float) * ne_gs * n_im * n_in * n_il); gbuf_size += sizeof(float) * ne_gs * n_im * n_in * n_il;
 
 	}
@@ -2893,6 +2896,11 @@ void Grid::sens2matlab(const std::string& nam)
 void Grid::csens2matlab(const std::string& nam)
 {
 	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.c_sens, n_cijk());
+}
+
+void Grid::Volsens2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.vol_sens, n_cijk());
 }
 
 void Grid::SSsens2matlab(const std::string& nam)

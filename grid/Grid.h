@@ -289,6 +289,7 @@ namespace grid {
 
 			float* g_sens;
 			float* c_sens;
+			float* vol_sens;
 
 			/*
 			  |_*_|_*_|_*_| * | * | * | * | * |
@@ -393,6 +394,7 @@ namespace grid {
 		std::function<bool(double[3])> _inFixedArea;
 		std::function<Eigen::Matrix<double, 3, 1>(double[3])> _loadField;
 
+		float _mbox[2][3];
 		int _num_surface_points = 1e5;
 
 		std::vector<int> _gsLoadNodes;
@@ -496,6 +498,8 @@ namespace grid {
 
 		float* getCSens(void) { return _gbuf.c_sens; }
 
+		float* getVolSens(void) { return _gbuf.vol_sens; }
+
 		float* getSSSens(void) { return _gbuf.ss_sens; }
 
 		float* getDripSens(void) { return _gbuf.drip_sens; }
@@ -569,6 +573,8 @@ namespace grid {
 
 		void init_coeff(double coeff);
 
+		void init_volsens(double ratio);
+
 		void init_rholist(float* rh0);
 
 		void init_coefflist(float* coeff);
@@ -611,7 +617,9 @@ namespace grid {
 
 		void ddensity2dcoeff(void);        // not use
 
-		void ddensity2dcoeff_update(void);
+		void ddensity2dcoeff_update(void); // dE/dc = dE/drho * drho/dcijk
+
+		void dvol2dcoeff(void);
 
 		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso);
 
@@ -677,6 +685,7 @@ namespace grid {
 		void sens2matlab(const std::string& nam);
 
 		void csens2matlab(const std::string& nam);
+		void Volsens2matlab(const std::string& nam);
 		void SSsens2matlab(const std::string& nam);
 		void Dripsens2matlab(const std::string& nam);
 

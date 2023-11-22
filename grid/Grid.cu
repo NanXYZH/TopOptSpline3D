@@ -67,9 +67,13 @@ extern __constant__ double* gLoadnormal[3];
 extern gBitSAT<unsigned int> vid2loadid;
 
 __device__ float Heaviside(float s) {
-#if 1
+#if 0
 	return s;
-#else
+#elif 1
+	float beta = 64;
+	float eta = 0.5;
+	return (tanhf(beta * eta) + tanhf(beta * (s - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
+#elif 0
 	float T = 0.5f;
 	float eta = 0.1f;
 	float alpha = 0.001f;
@@ -86,8 +90,12 @@ __device__ float Heaviside(float s) {
 }
 
 __device__ float Dirac(float s) {
-#if 1
+#if 0
 	return 1;
+#elif 1
+	float beta = 64;
+	float eta = 0.5;
+	return beta * (1 - tanhf(beta * (s - eta)) * tanhf(beta * (s - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
 #else
 	float T = 0.5f;
 	float eta = 0.1f;
@@ -3605,6 +3613,115 @@ void Grid::ddensity2dcoeff_update(void)
 	dc_host = nullptr;
 }
 
+void Grid::dvol2dcoeff(void)
+{
+	if (_layer != 0) return;
+	// computation
+	float* dc_tmp;
+	cudaMalloc(&dc_tmp, sizeof(float) * n_cijk());
+	init_array(dc_tmp, float{ 0 }, n_cijk());
+	cuda_error_check;
+
+	int order3 = m_iM * m_iM * m_iM;
+
+	float* cijk_value = _gbuf.coeffs;
+	float* knotx_ = _gbuf.KnotSer[0];
+	float* knoty_ = _gbuf.KnotSer[1];
+	float* knotz_ = _gbuf.KnotSer[2];
+	float* rholist = _gbuf.rho_e;
+	float* rho_diff = _gbuf.g_sens;
+	int* eidmap = _gbuf.eidmap;
+	int* eflag = _gbuf.eBitflag;
+
+	int ereso = _ereso;
+	float eh = elementLength();
+	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+
+	double dvol2drho = 1.0 / n_gselements;
+	std::cout << "-- [TEST] " << dvol2drho << std::endl;
+	std::cout << "-- [TEST] " << n_gselements << std::endl;
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
+
+	auto node1_diff = [=] __device__(int id, int eid) {
+		int xCoordi = id % ereso;
+		int yCoordi = (id % (ereso * ereso)) / ereso;
+		int zCoordi = id / (ereso * ereso);
+		float pos[3] = { boxOrigin[0] + xCoordi * eh + 0.5 * eh,boxOrigin[1] + yCoordi * eh + 0.5 * eh, boxOrigin[2] + zCoordi * eh + 0.5 * eh };
+
+		float val;
+		int i, j, k, ir, it, is, index;
+
+		float pNX[m_iM + 1];
+		float pNY[m_iM + 1];
+		float pNZ[m_iM + 1];
+
+		// the first knot index (order ... order + partion + 1) in knotspan(1 ... 2*order + partion)
+		i = (int)((pos[0] - gnBoundMin[0]) / gnstep[0]) + gorder[0];
+		j = (int)((pos[1] - gnBoundMin[1]) / gnstep[1]) + gorder[0];
+		k = (int)((pos[2] - gnBoundMin[2]) / gnstep[2]) + gorder[0];
+
+		if ((i < gorder[0]) || (i > gnbasis[0]) || (j < gorder[0]) || (j > gnbasis[1]) || (k < gorder[0]) || (k > gnbasis[2]))
+		{
+			val = -0.2f;
+		}
+		else
+		{
+			SplineBasisX(pos[0], pNX);
+			SplineBasisY(pos[1], pNY);
+			SplineBasisZ(pos[2], pNZ);
+
+			val = 0.0f;
+			int count4coeff = 0;
+			//index = i + j * m_im + k * m_im * m_in;
+			for (ir = i - gorder[0]; ir < i; ir++)
+			{
+				for (is = j - gorder[0]; is < j; is++)
+				{
+					for (it = k - gorder[0]; it < k; it++)
+					{
+						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
+						if (eflag[eid] & grid::Grid::mask_shellelement)
+						{
+							dc_tmp[index] += 0;
+						}
+						else
+						{
+							val = Dirac(rholist[eid]) * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							dc_tmp[index] += val;
+						}
+						count4coeff++;
+					}
+				}
+			}
+		}
+	};
+
+	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
+
+	ddensity2dcoeff_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, node1_diff, _gbuf.eidmap);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float* dc_host = new float[n_cijk()];
+	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
+	cuda_error_check;
+	// upload to _gbuf.c_sens
+	init_array(_gbuf.vol_sens, float{ 1 }, n_cijk());
+	cudaMemcpy(_gbuf.vol_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	cuda_error_check;
+
+#ifdef ENABLE_MATLAB
+	gpu_manager_t::pass_buf_to_matlab("volsens2", dc_host, n_cijk());
+#endif
+
+	cudaFree(dc_tmp);
+	dc_tmp = nullptr;
+	delete[] dc_host;
+	dc_host = nullptr;
+}
+
 template <class T>
 struct CudaAllocator {
 	using value_type = T;
@@ -4643,6 +4760,11 @@ void Grid::init_coeff(double coeff)
 	//std::cout << " test : " << n_cijk() << std::endl;
 	std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
 	init_array(_gbuf.coeffs, float(coeff), coeff_size);
+}
+
+void Grid::init_volsens(double ratio)
+{
+	init_array(_gbuf.vol_sens, float(ratio), n_cijk());
 }
 
 

@@ -103,6 +103,8 @@ void initDensities(double rho);
 
 void initCoeffs(double coeff);
 
+void initVolSens(double ratio);
+
 // MARK
 
 void update_stencil(void);

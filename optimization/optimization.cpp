@@ -798,6 +798,11 @@ void initCoeffs(double coeff)
 #endif
 }
 
+void initVolSens(double ratio)
+{
+	grids[0]->init_volsens(ratio);
+}
+
 void update_stencil(void)
 {
 	grids.update_stencil();
