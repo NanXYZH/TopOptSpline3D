@@ -206,7 +206,7 @@ namespace snippet {
 				_stopcounter--;
 				_stopcounter = (std::max)(_stopcounter, 0);
 			}
-			printf("[StopCheck] : fch %6.4lf%%(%6.4lf%%)  |   gch %6.4lf%%(%6.4lf%%)\n", fch * 100, _thres * 100, violate_gch * 100, _thres * 100);
+			printf("[StopCheck] : fch %6.4lf%%(%6.4lf%%)  |   gch %6.4lf%%(%6.4lf%%)  |   StopCounter %d \n", fch * 100, _thres * 100, violate_gch * 100, _thres * 100, _stopcounter);
 			_itn++;
 			return  _stopcounter > _maxcounter;
 		}

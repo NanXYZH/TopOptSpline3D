@@ -2403,8 +2403,11 @@ size_t grid::Grid::build(
 
 		_gbuf.init_rho_e = (float*)gm.add_buf(_name + "init_rho_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		_gbuf.coeffs = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
-		_gbuf.ss_sens = (float*)gm.add_buf(_name + " ss_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
-		_gbuf.drip_sens = (float*)gm.add_buf(_name + " drip_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+
+		_gbuf.ss_sens = (float*)gm.add_buf(_name + "ss_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.ssc_sens = (float*)gm.add_buf(_name + " ssc_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		_gbuf.drip_sens = (float*)gm.add_buf(_name + "drip_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.dripc_sens = (float*)gm.add_buf(_name + " dripc_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 
 		_gbuf.surface_point_buf = (float*)gm.add_buf(_name + " ss_buf ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.ss_value = (float*)gm.add_buf(_name + " ss_value ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
@@ -2490,7 +2493,8 @@ size_t grid::Grid::build(
 	if (_layer == 0) {
 		_gbuf.g_sens = (float*)gm.add_buf(_name + " g_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		_gbuf.c_sens = (float*)gm.add_buf(_name + " c_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
-		_gbuf.vol_sens = (float*)gm.add_buf(_name + " vol_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
+		_gbuf.vol_sens = (float*)gm.add_buf(_name + " vol_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.volc_sens = (float*)gm.add_buf(_name + " volc_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 		//_gbuf.de2dc = (float*)gm.add_buf(_name + " de2dc ", sizeof(float) * ne_gs * n_im * n_in * n_il); gbuf_size += sizeof(float) * ne_gs * n_im * n_in * n_il;
 
 	}
@@ -2910,17 +2914,32 @@ void Grid::csens2matlab(const std::string& nam)
 
 void Grid::Volsens2matlab(const std::string& nam)
 {
-	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.vol_sens, n_cijk());
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.vol_sens, n_rho());
+}
+
+void Grid::Volcsens2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.volc_sens, n_cijk());
 }
 
 void Grid::SSsens2matlab(const std::string& nam)
 {
-	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.ss_sens, n_cijk());
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.ss_sens, n_rho());
+}
+
+void Grid::SScsens2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.ssc_sens, n_cijk());
 }
 
 void Grid::Dripsens2matlab(const std::string& nam)
 {
-	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.drip_sens, n_cijk());
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.drip_sens, n_rho());
+}
+
+void Grid::Dripcsens2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.dripc_sens, n_cijk());
 }
 
 void Grid::v2vcoarse2matlab(const std::string& nam)

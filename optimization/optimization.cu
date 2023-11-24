@@ -227,6 +227,7 @@ void computeSensitivity(void) {
 	grids[0]->ddensity2dcoeff_update();
 
 	// vol: rho_diff 2 coeff_diff
+	// MARK[TODO]: need to fixed
 	grids[0]->dvol2dcoeff();
 
 	cudaMemGetInfo(&free_mem, &total_mem);
@@ -256,15 +257,26 @@ void computeSensitivity2(float beta) {
 	// DEBUG
 	grids[0]->sens2matlab("sens");
 
+	// init dvol/dexPhys to 1/N
+	float dvol2dexPhys = 1.0 / grids[0]->n_rho();
+	init_array(grids[0]->getVolSens(), dvol2dexPhys, grids[0]->n_rho());
+	grids[0]->csens2matlab("volsens");
+
 	// project sensitivity
 #ifdef ENABLE_HEAVISIDE
-	//MARK[TO CHANGE] sth wrong : use init rho or rho after filter, not rho after Heaviside
+	grids[0]->initrho2matlab("initrho");
+	grids[0]->rho2matlab("rho");
+
 	computeProjectionSensitivity_kernel << < grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getInitRho(), grids[0]->getSens(), grids[0]->getSens(), beta);
 	cudaDeviceSynchronize();
 	cuda_error_check;
-	grids[0]->initrho2matlab("initrho");
-	grids[0]->rho2matlab("rho");
 	grids[0]->sens2matlab("sensproj");
+
+	computeProjectionSensitivity_kernel << < grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getInitRho(), grids[0]->getVolSens(), grids[0]->getVolSens(), beta);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	grids[0]->Volsens2matlab("volsensproj");
+
 #endif
 
 	// filter sensitivity
@@ -273,11 +285,17 @@ void computeSensitivity2(float beta) {
 	// DEBUG
 	grids[0]->sens2matlab("sensfilt");
 
+	// filter vol sensitivity
+	grids[0]->filterVolSensitivity(params.filter_radius);
+
+	// DEBUG
+	grids[0]->Volsens2matlab("volsensfilt");
+
 	size_t free_mem, total_mem;
 	cudaMemGetInfo(&free_mem, &total_mem);
 	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
 
-	// rho_diff 2 coeff_diff
+	// energy: rho_diff 2 coeff_diff
 	grids[0]->ddensity2dcoeff_update();
 
 	// vol: rho_diff 2 coeff_diff
@@ -288,7 +306,7 @@ void computeSensitivity2(float beta) {
 
 	// DEBUG
 	grids[0]->csens2matlab("csensfilt2");
-
+	grids[0]->Volcsens2matlab("volcsensfilt2");
 }
 
 __global__ void computeProjection_kernel(

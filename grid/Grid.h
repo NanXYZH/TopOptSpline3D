@@ -268,7 +268,9 @@ namespace grid {
 			float* ss_value;
 			float* drip_value;
 			float* ss_sens;
+			float* ssc_sens;
 			float* drip_sens;
+			float* dripc_sens;
 
 			float* surface_points_flag;             // compute the support constraint: 1 (not support) 0 (support)
 			float* surface_points_flag_virtual;
@@ -293,6 +295,7 @@ namespace grid {
 			float* g_sens;
 			float* c_sens;
 			float* vol_sens;
+			float* volc_sens;
 
 			/*
 			  |_*_|_*_|_*_| * | * | * | * | * |
@@ -474,9 +477,9 @@ namespace grid {
 		void applyAjointK(double* usrc[3], double* fdst[3]);
 
 		void filterSensitivity(double radii);
+		void filterVolSensitivity(double radii);
 
 		
-
 		Eigen::Matrix<double, 3, 1> outwardNormal(double p[3]);
 
 		std::vector<int> getVflags(void);
@@ -500,15 +503,18 @@ namespace grid {
 
 		float* getCoeff(void) { return _gbuf.coeffs;  }
 
-		float* getSens(void) { return _gbuf.g_sens; }
+		float* getSens(void) { return _gbuf.g_sens; }  // de/drho
 
-		float* getCSens(void) { return _gbuf.c_sens; }
+		float* getCSens(void) { return _gbuf.c_sens; } // de/dc
 
-		float* getVolSens(void) { return _gbuf.vol_sens; }
+		float* getVolSens(void) { return _gbuf.vol_sens; } // dvol/drho
+		float* getVolCSens(void) { return _gbuf.volc_sens; } // dvol/dc
 
-		float* getSSSens(void) { return _gbuf.ss_sens; }
+		float* getSSSens(void) { return _gbuf.ss_sens; }   // dss/drho
+		float* getSSCSens(void) { return _gbuf.ssc_sens; }   // dss/dc
 
-		float* getDripSens(void) { return _gbuf.drip_sens; }
+		float* getDripSens(void) { return _gbuf.drip_sens; } // ddrip/drho
+		float* getDripCSens(void) { return _gbuf.dripc_sens; } // ddrip/dc
 
 		double** getWorstForce(void) { return _gbuf.Fworst; }
 
@@ -580,6 +586,7 @@ namespace grid {
 		void init_coeff(double coeff);
 
 		void init_volsens(double ratio);
+		void init_volcsens(double ratio);
 
 		void init_rholist(float* rh0);
 
@@ -625,7 +632,7 @@ namespace grid {
 
 		void ddensity2dcoeff_update(void); // dE/dc = dE/drho * drho/dcijk
 
-		void dvol2dcoeff(void);
+		void dvol2dcoeff(void);            // dVol/dc = dVol/drho * drho/dcijk    
 
 		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso);
 
@@ -692,11 +699,16 @@ namespace grid {
 		void rho2matlab(const std::string& nam);
 
 		void sens2matlab(const std::string& nam);
-
 		void csens2matlab(const std::string& nam);
+
 		void Volsens2matlab(const std::string& nam);
+		void Volcsens2matlab(const std::string& nam);
+
 		void SSsens2matlab(const std::string& nam);
+		void SScsens2matlab(const std::string& nam);
+
 		void Dripsens2matlab(const std::string& nam);
+		void Dripcsens2matlab(const std::string& nam);
 
 		void v2v2matlab(const std::string& nam);
 

@@ -611,9 +611,6 @@ void TestSuit::testOrdinaryTopopt(void)
 	grids[0]->reset_displacement();
 	grids.writeSupportForce(grids.getPath("fs"));
 
-	float para_beta = 8;
-	float change_tol = 1e-3;
-	float change[2] = { 0.f };
 #if 1
 	initDensities(params.volume_ratio);
 	float Vgoal = params.volume_ratio;
@@ -624,6 +621,9 @@ void TestSuit::testOrdinaryTopopt(void)
 
 	// project density
 #ifdef ENABLE_HEAVISIDE
+	float para_beta = 8;
+	float change_tol = 1e-3;
+	float change[2] = { 0.f };
 	grids[0]->rho2matlab("rhopj0");
 	projectDensities(para_beta);
 
@@ -661,20 +661,27 @@ void TestSuit::testOrdinaryTopopt(void)
 		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
 		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
+		
+#ifdef ENABLE_HEAVISIDE
 		// compute sensitivity
-		computeSensitivity();
-		//computeSensitivity2(para_beta);
+		computeSensitivity2(para_beta);
 		// update density
-		updateDensities(Vgoal);
-		//updateDensities2(Vgoal, para_beta, change);
-		//printf("-- max design variable change = %6.4f \n", change[0]);
-		//if ((change[1] < change_tol || itn % 5 == 0) && para_beta < 256)
-		//{
-		//	para_beta = para_beta * 2;
-		//	std::cout << "-- current beta: " << para_beta << std::endl;
-		//}
+		updateDensities2(Vgoal, para_beta, change);
+		printf("-- max design variable change = %6.4f \n", change[0]);
+		if ((change[1] < change_tol || itn % 5 == 0) && para_beta < 256)
+		{
+			para_beta = para_beta * 2;
+			std::cout << "-- current beta: " << para_beta << std::endl;
+		}
 		grids[0]->initrho2matlab("rho2i");
 		grids[0]->rho2matlab("rho2");
+#else
+		// compute sensitivity
+		computeSensitivity();
+		// update density
+		updateDensities(Vgoal);
+		grids[0]->rho2matlab("rho2");
+#endif
 	}
 
 	printf("\n=   finished   =\n");
@@ -713,6 +720,18 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 	float Vgoal = 1;
 #endif
 
+	// project density
+#ifdef ENABLE_HEAVISIDE
+	float para_beta = 8;
+	float change_tol = 1e-3;
+	float change[2] = { 0.f };
+	//grids[0]->rho2matlab("rhopj0");
+	//projectDensities(para_beta);
+
+	//grids[0]->initrho2matlab("rhoinit");
+	//grids[0]->rho2matlab("rhopj");
+#endif
+
 	int itn = 0;
 
 	snippet::converge_criteria stop_check(1, 5, 1e-3);
@@ -726,7 +745,7 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 	// here set the lower and upper bound of design variables
 	mma.init(params.min_rho, 1);
 	float volScale = 1e3;
-	float sensScale = 1e-1;
+	float sensScale = 1e5;
 	gv::gVector dv(grids[0]->n_gselements, volScale / grids[0]->n_gselements);
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -736,9 +755,23 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 		Vc = Vgoal - params.volume_ratio;
 		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
 
+		printf("-- Vgoal = %6.4f  Vc = %6.4f \n", Vgoal, Vc);
+
 		// update density from mma
 		setDensity(mma.get_x().data());
 		gpu_manager_t::pass_dev_buf_to_matlab("rho", grids[0]->getRho(), grids[0]->n_rho());
+
+#ifdef ENABLE_HEAVISIDE
+		// MARK to compare rho to update para_beta
+		
+		if (itn % 10 == 0 && itn > 2 && para_beta < 128)
+		{
+			para_beta = para_beta * 2;
+		}
+		projectDensities(para_beta);
+		grids[0]->initrho2matlab("rhoinit");
+		grids[0]->rho2matlab("rhopj");
+#endif
 
 		// compute volume
 		double vol = grids[0]->volumeRatio();
@@ -756,11 +789,18 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 		double c = grids[0]->compliance();
 		printf("-- c = %6.4e  v = %4.3lf  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
-		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
-		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
+		cRecord.emplace_back(c); volRecord.emplace_back(vol);
+		if (stop_check.update(c, &vol) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
+
+#ifdef ENABLE_HEAVISIDE
+		// compute sensitivity
+		computeSensitivity2(para_beta);
+#else
 		// compute sensitivity
 		computeSensitivity();
+#endif
+		
 		// update density
 		scaleVector(grids[0]->getSens(), grids[0]->n_gselements, sensScale);
 
@@ -786,7 +826,6 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 	// write volume record during optimization
 	bio::write_vector(grids.getPath("vrec"), volRecord);
 }
-
 
 void TestSuit::testOrdinarySplineTopopt(void)
 {
@@ -919,8 +958,20 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	initDensities(1);
 	float Vgoal = 1;
 #endif
-	// for surface points test
 
+	// project density
+#ifdef ENABLE_HEAVISIDE
+	float para_beta = 8;
+	float change_tol = 1e-3;
+	float change[2] = { 0.f };
+	//grids[0]->rho2matlab("rhopj0");
+	//projectDensities(para_beta);
+
+	//grids[0]->initrho2matlab("rhoinit");
+	//grids[0]->rho2matlab("rhopj");
+#endif
+
+	// for surface points test
 	if (grids.areALLCoeffsEqual())
 	{
 		std::cout << "-- [Same Coeff cannot extra surface points] --" << std::endl;
@@ -989,6 +1040,18 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		// update coeff 2 density
 		grids[0]->coeff2density();
 
+#ifdef ENABLE_HEAVISIDE
+		// MARK to compare rho to update para_beta
+
+		if (itn % 10 == 0 && itn > 2 && para_beta < 128)
+		{
+			para_beta = para_beta * 2;
+		}
+		projectDensities(para_beta);
+		grids[0]->initrho2matlab("rhoinit");
+		grids[0]->rho2matlab("rhopj");
+#endif
+
 		// compute volume 
 		// MARK[TODO] : how to add changing volume ratio in MMA (OK)
 		double vol = grids[0]->volumeRatio();
@@ -1018,26 +1081,30 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
 		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
+
+#ifdef ENABLE_HEAVISIDE
+		// compute sensitivity
+		computeSensitivity2(para_beta);
+#else
 		// compute sensitivity
 		computeSensitivity();
+#endif
 
 		scaleVector(grids[0]->getCSens(), grids[0]->n_cijk(), sensScale);
+		scaleVector(grids[0]->getVolCSens(), grids[0]->n_cijk(), volScale);
+
+		//// just for testing the form of getVolSens input is OK
+		//initVolSens(1);
+		//gpu_manager_t::pass_dev_buf_to_matlab("volsens11", grids[0]->getVolSens(), grids[0]->n_cijk());
 		//scaleVector(grids[0]->getVolSens(), grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
-		initVolSens(1);
-		gpu_manager_t::pass_dev_buf_to_matlab("volsens11", grids[0]->getVolSens(), grids[0]->n_cijk());
-		scaleVector(grids[0]->getVolSens(), grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 
 		gpu_manager_t::pass_dev_buf_to_matlab("csens", grids[0]->getCSens(), grids[0]->n_cijk());
-		gpu_manager_t::pass_dev_buf_to_matlab("volsens", grids[0]->getVolSens(), grids[0]->n_cijk());
-
-		//Eigen::Matrix<float, -1, 1> mat_buf;
-		//mat_buf.resize(grids[0]->n_cijk(), 1);
-		//download_buf(mat_buf.data(), dev_ptr, grids[0]->n_cijk() * sizeof(float));
+		gpu_manager_t::pass_dev_buf_to_matlab("volcsens", grids[0]->getVolCSens(), grids[0]->n_cijk());
 
 		// compute difference of current g
 		for (int i = 0; i < n_constraint; i++) {
 			//gdiffval[i] = dv;
-			gdiff[i] = grids[0]->getVolSens();
+			gdiff[i] = grids[0]->getVolCSens();
 		}
 
 		// compute current constrain value 

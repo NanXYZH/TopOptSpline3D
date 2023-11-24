@@ -73,7 +73,7 @@ __device__ float Heaviside(float s) {
 	float beta = 64;
 	float eta = 0.5;
 	return (tanhf(beta * eta) + tanhf(beta * (s - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
-#elif 0
+#else 
 	float T = 0.5f;
 	float eta = 0.1f;
 	float alpha = 0.001f;
@@ -3294,8 +3294,8 @@ void Grid::coeff2density(void)
 		// MARK[TODO] : restrict the density bound
 		// rhoknew = clamp(rhoknew, rhomin, 1.f);
      	// if (gEflag[0][eid] & grid::Grid::Bitmask::mask_shellelement) rhonew = 1;
-		//return val;
-		return Heaviside(val);
+		return val;
+		//return Heaviside(val);
 	};
 
 	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
@@ -3435,7 +3435,7 @@ void Grid::ddensity2dcoeff(void)
 						}
 						else
 						{
-							val = Dirac(rholist[eid]) * rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							val = /*Dirac(rholist[eid]) * */rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 							part2c_value[order3 * eid + count4coeff] = val;
 
 						}
@@ -3579,7 +3579,7 @@ void Grid::ddensity2dcoeff_update(void)
 						}
 						else
 						{
-							val = Dirac(rholist[eid]) * rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							val = /*Dirac(rholist[eid]) * */rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 							dc_tmp[index] += val;
 						}
 						count4coeff++;
@@ -3630,6 +3630,7 @@ void Grid::dvol2dcoeff(void)
 	float* knotz_ = _gbuf.KnotSer[2];
 	float* rholist = _gbuf.rho_e;
 	float* rho_diff = _gbuf.g_sens;
+	float* vol_diff = _gbuf.vol_sens;
 	int* eidmap = _gbuf.eidmap;
 	int* eflag = _gbuf.eBitflag;
 
@@ -3638,8 +3639,8 @@ void Grid::dvol2dcoeff(void)
 	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
 
 	double dvol2drho = 1.0 / n_gselements;
-	std::cout << "-- [TEST] " << dvol2drho << std::endl;
-	std::cout << "-- [TEST] " << n_gselements << std::endl;
+	//std::cout << "-- [TEST] " << dvol2drho << std::endl;
+	//std::cout << "-- [TEST] " << n_gselements << std::endl;
 
 	size_t grid_size, block_size;
 	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
@@ -3688,7 +3689,7 @@ void Grid::dvol2dcoeff(void)
 						}
 						else
 						{
-							val = Dirac(rholist[eid]) * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							val = vol_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
 							dc_tmp[index] += val;
 						}
 						count4coeff++;
@@ -3708,12 +3709,12 @@ void Grid::dvol2dcoeff(void)
 	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
 	cuda_error_check;
 	// upload to _gbuf.c_sens
-	init_array(_gbuf.vol_sens, float{ 1 }, n_cijk());
-	cudaMemcpy(_gbuf.vol_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	init_array(_gbuf.volc_sens, float{ 1 }, n_cijk());
+	cudaMemcpy(_gbuf.volc_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
 #ifdef ENABLE_MATLAB
-	gpu_manager_t::pass_buf_to_matlab("volsens2", dc_host, n_cijk());
+	gpu_manager_t::pass_buf_to_matlab("volcsens2", dc_host, n_cijk());
 #endif
 
 	cudaFree(dc_tmp);
@@ -4090,6 +4091,36 @@ void Grid::filterSensitivity(double radii)
 	init_array(_gbuf.g_sens, float{ 0 }, n_gselements);
 
 	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, g_sens_copy, _gbuf.g_sens, radii, fr, _gbuf.eidmap);
+
+	cudaDeviceSynchronize();
+
+	clearBuf();
+
+	cuda_error_check;
+}
+
+void Grid::filterVolSensitivity(double radii)
+{
+	if (_layer != 0) return;
+
+	size_t grid_size, block_size;
+
+	make_kernel_param(&grid_size, &block_size, _gbuf.nword_ebits, 512);
+
+	auto fr = [=] __device__(float r) {
+		float r2 = r * r;
+		return 1 - 6 * r2 + 8 * r2 * r - 3 * r2 * r2;
+	};
+
+	gBitSAT<unsigned int> esat(_gbuf.eActiveBits, _gbuf.eActiveChunkSum);
+
+	float* vol_sens_copy = (float*)getTempBuf(sizeof(float) * n_gselements);
+
+	cudaMemcpy(vol_sens_copy, _gbuf.vol_sens, sizeof(float) * n_gselements, cudaMemcpyDeviceToDevice);
+
+	init_array(_gbuf.vol_sens, float{ 0 }, n_gselements);
+
+	filterSensitivity_kernel << <grid_size, block_size >> > (_gbuf.nword_ebits, esat, _ereso, vol_sens_copy, _gbuf.vol_sens, radii, fr, _gbuf.eidmap);
 
 	cudaDeviceSynchronize();
 
@@ -4764,9 +4795,13 @@ void Grid::init_coeff(double coeff)
 
 void Grid::init_volsens(double ratio)
 {
-	init_array(_gbuf.vol_sens, float(ratio), n_cijk());
+	init_array(_gbuf.vol_sens, float(ratio), n_rho());
 }
 
+void Grid::init_volcsens(double ratio)
+{
+	init_array(_gbuf.volc_sens, float(ratio), n_cijk());
+}
 
 //void TestSuit::setDensity(float* newrho)
 //{
@@ -5953,8 +5988,8 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 	float* dc_host = new float[n_cijk()];
 	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
 	cuda_error_check;
-	init_array(_gbuf.ss_sens, float{ 0 }, n_cijk());
-	cudaMemcpy(_gbuf.ss_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
+	init_array(_gbuf.ssc_sens, float{ 0 }, n_cijk());
+	cudaMemcpy(_gbuf.ssc_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
 #ifdef ENABLE_MATLAB

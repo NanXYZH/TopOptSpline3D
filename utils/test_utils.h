@@ -76,6 +76,8 @@ public:
 
 	static void testKernels(void);
 
+	static void setInitDensity(float* newrho);
+
 	static void setDensity(float* newrho);
 
 	static void setCoeff(float* newcijk);

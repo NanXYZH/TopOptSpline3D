@@ -46,6 +46,12 @@ extern  __constant__ int gdripmode[1];
 extern  __constant__ float gdefaultPrintAngle[1];
 extern  __constant__ float goptPrintAngle[1];
 
+void TestSuit::setInitDensity(float* newrho)
+{
+	cudaMemcpy(grids[0]->getInitRho(), newrho, sizeof(float) * grids[0]->n_rho(), cudaMemcpyDeviceToDevice);
+	cuda_error_check;
+}
+
 void TestSuit::setDensity(float* newrho)
 {
 	cudaMemcpy(grids[0]->getRho(), newrho, sizeof(float) * grids[0]->n_rho(), cudaMemcpyDeviceToDevice);
