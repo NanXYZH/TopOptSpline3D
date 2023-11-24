@@ -611,12 +611,24 @@ void TestSuit::testOrdinaryTopopt(void)
 	grids[0]->reset_displacement();
 	grids.writeSupportForce(grids.getPath("fs"));
 
+	float para_beta = 8;
+	float change_tol = 1e-3;
+	float change[2] = { 0.f };
 #if 1
 	initDensities(params.volume_ratio);
 	float Vgoal = params.volume_ratio;
 #else
 	initDensities(1);
 	float Vgoal = 1;
+#endif
+
+	// project density
+#ifdef ENABLE_HEAVISIDE
+	grids[0]->rho2matlab("rhopj0");
+	projectDensities(para_beta);
+
+	grids[0]->initrho2matlab("rhoinit");
+	grids[0]->rho2matlab("rhopj");
 #endif
 
 	int itn = 0;
@@ -651,8 +663,18 @@ void TestSuit::testOrdinaryTopopt(void)
 		grids.log(itn);
 		// compute sensitivity
 		computeSensitivity();
+		//computeSensitivity2(para_beta);
 		// update density
 		updateDensities(Vgoal);
+		//updateDensities2(Vgoal, para_beta, change);
+		//printf("-- max design variable change = %6.4f \n", change[0]);
+		//if ((change[1] < change_tol || itn % 5 == 0) && para_beta < 256)
+		//{
+		//	para_beta = para_beta * 2;
+		//	std::cout << "-- current beta: " << para_beta << std::endl;
+		//}
+		grids[0]->initrho2matlab("rho2i");
+		grids[0]->rho2matlab("rho2");
 	}
 
 	printf("\n=   finished   =\n");

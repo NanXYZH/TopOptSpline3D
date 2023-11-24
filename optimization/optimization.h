@@ -84,11 +84,17 @@ double MGPSOR(void);
 
 void computeSensitivity(void);
 
+void computeSensitivity2(float beta);
+
 bool checkAdjointVariable(void);
 
 float updateDensities(float Vgoal);
 
+float updateDensities2(float Vgoal, float beta, float change[2]);
+
 float updateCoeff(float Vgoal);
+
+void projectDensities(float beta);
 
 void optimization(void);
 

@@ -61,9 +61,39 @@ __device__ int gridPos2id(int x, int y, int z) {
 	return x + y * N + z * N * N;
 }
 
+__global__ void para_minus(
+	int nv, const float* input1, const float* input2, float* dst) {
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid >= nv) return;
+
+	int eid = gV2E[7][tid];
+
+	if (eid == -1) { return; }
+
+	float a = input1[eid];
+	float b = input2[eid];
+
+	dst[eid] = a - b;
+}
+
+__global__ void para_minus_abs(
+	int nv, const float* input1, const float* input2, float* dst) {
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid >= nv) return;
+
+	int eid = gV2E[7][tid];
+
+	if (eid == -1) { return; }
+
+	float a = input1[eid];
+	float b = input2[eid];
+
+	dst[eid] = abs(a - b);
+}
+
 //  suppose Uworst, Fworst is prepared in U, F
 __global__ void computeSensitivity_kernel(int nv, float* rholist, double mu, float* sens) {
-	int tid = blockDim.x*blockIdx.x + threadIdx.x;
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 
 	__shared__ double KE[24][24];
 
@@ -127,11 +157,37 @@ __global__ void computeSensitivity_kernel(int nv, float* rholist, double mu, flo
 
 }
 
+__global__ void computeProjectionSensitivity_kernel(
+	int nv, const float* initrholist, const float* sens, float* newsens, float beta) {
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid >= nv) return;
+
+	int eid = gV2E[7][tid];
+
+	if (eid == -1) { return; }
+
+	//float beta = 8;
+	float eta = 0.5;
+
+	float sensold = sens[eid];
+
+	float rho = initrholist[eid];
+
+#if 0
+	float diracrho = 1;
+#else
+	float diracrho = beta * (1 - tanhf(beta * (rho - eta)) * tanhf(beta * (rho - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
+#endif
+	newsens[eid] = sensold * diracrho;
+}
+
 void computeSensitivity(void) {
 	grids[0]->use_grid();
 	// now, suppose Uworst, Fworst is prepared, N^T * Lambda is in U,
 	// copy Fworst=KUworst to F
 	//grids[0]->v3_copy(grids[0]->getWorstForce(), grids[0]->getForce());
+
+	int para_beta = 8;
 
 	// init sensitivity to zero
 	init_array(grids[0]->getSens(), float{ 0 }, grids[0]->n_rho());
@@ -144,7 +200,18 @@ void computeSensitivity(void) {
 	cuda_error_check;
 
 	// DEBUG
-	//grids[0]->sens2matlab("sens");
+	grids[0]->sens2matlab("sens");
+
+//	// project sensitivity
+//#ifdef ENABLE_HEAVISIDE
+//	//MARK[TO CHANGE] sth wrong : use init rho or rho after filter, not rho after Heaviside
+//	computeProjectionSensitivity_kernel << < grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getInitRho(), grids[0]->getSens(), grids[0]->getSens(), para_beta);
+//	cudaDeviceSynchronize();
+//	cuda_error_check;
+//	grids[0]->initrho2matlab("initrho");
+//	grids[0]->rho2matlab("rho");
+//	grids[0]->sens2matlab("sensproj");
+//#endif
 
 	// filter sensitivity
 	grids[0]->filterSensitivity(params.filter_radius);
@@ -170,6 +237,101 @@ void computeSensitivity(void) {
 
 }
 
+void computeSensitivity2(float beta) {
+	grids[0]->use_grid();
+	// now, suppose Uworst, Fworst is prepared, N^T * Lambda is in U,
+	// copy Fworst=KUworst to F
+	//grids[0]->v3_copy(grids[0]->getWorstForce(), grids[0]->getForce());
+
+	// init sensitivity to zero
+	init_array(grids[0]->getSens(), float{ 0 }, grids[0]->n_rho());
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, grids[0]->n_nodes(), 512);
+
+	computeSensitivity_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->_keyvalues["mu"], grids[0]->getSens());
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	// DEBUG
+	grids[0]->sens2matlab("sens");
+
+	// project sensitivity
+#ifdef ENABLE_HEAVISIDE
+	//MARK[TO CHANGE] sth wrong : use init rho or rho after filter, not rho after Heaviside
+	computeProjectionSensitivity_kernel << < grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getInitRho(), grids[0]->getSens(), grids[0]->getSens(), beta);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	grids[0]->initrho2matlab("initrho");
+	grids[0]->rho2matlab("rho");
+	grids[0]->sens2matlab("sensproj");
+#endif
+
+	// filter sensitivity
+	grids[0]->filterSensitivity(params.filter_radius);
+
+	// DEBUG
+	grids[0]->sens2matlab("sensfilt");
+
+	size_t free_mem, total_mem;
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
+
+	// rho_diff 2 coeff_diff
+	grids[0]->ddensity2dcoeff_update();
+
+	// vol: rho_diff 2 coeff_diff
+	grids[0]->dvol2dcoeff();
+
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
+
+	// DEBUG
+	grids[0]->csens2matlab("csensfilt2");
+
+}
+
+__global__ void computeProjection_kernel(
+	int nv, const float* rholist, float rhomin, float* newrho, float beta) {
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid >= nv) return;
+
+	int eid = gV2E[7][tid];
+
+	if (eid == -1) { return; }
+
+	//float beta = 8;
+	float eta = 0.5;
+
+	float rhoold = rholist[eid];
+
+#if 0
+	float rhonew = rhoold;
+#else
+	float rhonew = (tanhf(beta * eta) + tanhf(beta * (rhoold - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
+#endif
+	rhonew = clamp(rhonew, rhomin, 1.f);
+
+	if (gEflag[0][eid] & grid::Grid::Bitmask::mask_shellelement) rhonew = 1;
+
+	newrho[eid] = rhonew;
+}
+
+void projectDensities(float beta)
+{
+	grids[0]->use_grid();
+	init_array(grids[0]->_gbuf.init_rho_e, float{ 0 }, grids[0]->n_rho());
+
+	cudaMemcpy(grids[0]->_gbuf.init_rho_e, grids[0]->_gbuf.rho_e, sizeof(float) * grids[0]->n_rho(), cudaMemcpyDeviceToDevice);
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, grids[0]->n_nodes(), 512);
+
+	// update densities by Heaviside
+	computeProjection_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getInitRho(), params.min_rho, grids[0]->getRho(), beta);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+}
 
 __global__ void trySensMultiplier_kernel(
 	int nv, const float* rholist, float* g_sens, float g_thres, float step, float damp, float rhomin, float* newrho) {
@@ -210,6 +372,8 @@ float updateDensities(float Vgoal) {
 	float g_thres_low = 0;
 	float g_thres_upp = 1;
 
+	float para_beta = 8;
+
 	// compute old volume ratio
 	double* sum = (double*)grid::Grid::getTempBuf(sizeof(double) * grids[0]->n_rho() / 100);
 	double Vold = parallel_sum_d(grids[0]->getRho(), sum, grids[0]->n_rho()) / grids[0]->n_rho();
@@ -217,6 +381,7 @@ float updateDensities(float Vgoal) {
 	// compute maximal sensitivity
 	float* maxdump = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_rho() / 100);
 	float g_max = parallel_maxabs(grids[0]->getSens(), maxdump, grids[0]->n_rho());
+
 
 	g_thres_upp = g_max;
 
@@ -242,6 +407,12 @@ float updateDensities(float Vgoal) {
 		cudaDeviceSynchronize();
 		cuda_error_check;
 
+//#ifdef ENABLE_HEAVISIDE
+//		computeProjection_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), newrho, params.min_rho, newrho, para_beta);
+//		cudaDeviceSynchronize();
+//		cuda_error_check;
+//#endif // ENABLE_HEAVISIDE
+
 		// compute new volume ratio
 		Vratio = dump_array_sum(newrho, grids[0]->n_rho()) / grids[0]->n_rho();
 
@@ -255,13 +426,117 @@ float updateDensities(float Vgoal) {
 		}
 	} while (abs(Vratio - Vgoal) > 1e-4 && itn++ < 30);
 
-	// update densities according to new sensitivity
+	// update densities according to new sensitivity 
+	// use current g_thres to update rho(like newrho before)
 	trySensMultiplier_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_rho, grids[0]->getRho());
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
+//	// update Heaviside densities
+//#ifdef ENABLE_HEAVISIDE
+//	projectDensities(para_beta);
+//#endif // ENABLE_HEAVISIDE
+
 	return g_thres;
 }
+
+float updateDensities2(float Vgoal, float beta, float change[2]) {
+	grids[0]->use_grid();
+
+	size_t grid_size, block_size;
+	make_kernel_param(&grid_size, &block_size, grids[0]->n_nodes(), 512);
+
+	float Vratio = 2;
+
+	float g_thres_low = 0;
+	float g_thres_upp = 1;
+
+	// compute old volume ratio
+	double* sum = (double*)grid::Grid::getTempBuf(sizeof(double) * grids[0]->n_rho() / 100);
+	double Vold = parallel_sum_d(grids[0]->getRho(), sum, grids[0]->n_rho()) / grids[0]->n_rho();
+
+	// compute maximal sensitivity
+	float* maxdump = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_rho() / 100);
+	float g_max = parallel_maxabs(grids[0]->getSens(), maxdump, grids[0]->n_rho());
+
+	// record old rho
+	float* rhoold;
+	cudaMalloc(&rhoold, sizeof(float) * grids[0]->n_rho());
+	init_array(rhoold, float{ 0 }, grids[0]->n_rho());
+	cuda_error_check;
+	cudaMemcpy(rhoold, grids[0]->_gbuf.init_rho_e, sizeof(float) * grids[0]->n_rho(), cudaMemcpyDeviceToDevice);
+
+	g_thres_upp = g_max;
+
+	printf("[sensitivity] max = %4.4e\n", g_max);
+
+	float g_thres = (g_thres_low + g_thres_upp) / 2;
+
+	// iteration counter
+	int itn = 0;
+
+	// bisection search sensitivity multiplier
+	do {
+		// update sensitivity threshold
+		g_thres = (g_thres_low + g_thres_upp) / 2;
+
+		printf("-- searching multiplier g = %4.4e", g_thres);
+
+		float* newrho = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_rho());
+
+		// update new rho
+		trySensMultiplier_kernel << <grid_size, block_size >> > (
+			grids[0]->n_nodes(), grids[0]->getInitRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_rho, newrho);
+		cudaDeviceSynchronize();
+		cuda_error_check;
+
+#ifdef ENABLE_HEAVISIDE
+		computeProjection_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), newrho, params.min_rho, newrho, beta);
+		cudaDeviceSynchronize();
+		cuda_error_check;
+#endif // ENABLE_HEAVISIDE
+
+		// compute new volume ratio
+		Vratio = dump_array_sum(newrho, grids[0]->n_rho()) / grids[0]->n_rho();
+
+		printf(", V = %f  goal %f\n", Vratio, Vgoal);
+
+		if (Vratio > Vgoal) {
+			g_thres_low = g_thres;
+		}
+		else if (Vratio < Vgoal) {
+			g_thres_upp = g_thres;
+		}
+	} while (abs(Vratio - Vgoal) > 1e-4 && (g_thres_upp - g_thres_low) / (g_thres_low + g_thres_upp) > 1e-3 && itn++ < 50);
+
+	// update densities according to new sensitivity 
+	// use current g_thres to update rho(like newrho before)
+	trySensMultiplier_kernel << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getInitRho(), grids[0]->getSens(), g_thres, params.design_step, params.damp_ratio, params.min_rho, grids[0]->getRho());
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	// update Heaviside densities
+#ifdef ENABLE_HEAVISIDE
+	projectDensities(beta);
+#endif // ENABLE_HEAVISIDE
+
+	para_minus_abs << <grid_size, block_size >> > (grids[0]->n_nodes(), rhoold, grids[0]->getInitRho(), rhoold);
+	//para_minus << <grid_size, block_size >> > (grids[0]->n_nodes(), grids[0]->getInitRho(), grids[0]->getRho(), rhoold);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	float* maxabs = (float*)grid::Grid::getTempBuf(sizeof(float) * grids[0]->n_rho() / 100);
+	change[0] = parallel_maxabs(rhoold, maxabs, grids[0]->n_rho());
+	change[1] = parallel_sum(rhoold, maxabs, grids[0]->n_rho()) / grids[0]->n_rho();
+
+	std::cout << "test: " << change[0] << std::endl;
+	std::cout << "test: " << change[1] << std::endl;
+
+	cudaFree(rhoold);
+	rhoold = nullptr;
+	
+	return g_thres;
+}
+
 
 
 __global__ void tryCSensMultiplier_kernel(
@@ -401,6 +676,7 @@ float updateCoeff(float Vgoal) {
 
 	return g_thres;
 }
+
 
 
 extern void matlab_utils_test(void);

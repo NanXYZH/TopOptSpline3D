@@ -3,6 +3,8 @@
 #ifndef GRID_H
 #define GRID_H
 
+#define ENABLE_HEAVISIDE
+
 //#include "fast_marching_method.hpp"
 #include "voxelizer.h"
 
@@ -273,6 +275,7 @@ namespace grid {
 			//float* de2dc;
 			float* KnotSer[3];
 			float* rho_e;
+			float* init_rho_e;
 			int * v2e[8];
 			int* v2vfine[27];
 			int* v2vcoarse[8];
@@ -472,6 +475,8 @@ namespace grid {
 
 		void filterSensitivity(double radii);
 
+		
+
 		Eigen::Matrix<double, 3, 1> outwardNormal(double p[3]);
 
 		std::vector<int> getVflags(void);
@@ -491,6 +496,7 @@ namespace grid {
 		float** getSurfacePoints(void) { return _gbuf.surface_points; }
 
 		float* getRho(void) { return _gbuf.rho_e; }
+		float* getInitRho(void) { return _gbuf.init_rho_e; }
 
 		float* getCoeff(void) { return _gbuf.coeffs;  }
 
@@ -681,6 +687,9 @@ namespace grid {
 		bool isForceFree(void) { return _mode == no_support_free_force || _mode == with_support_free_force; }
 
 		bool hasSupport(void) { return _mode == with_support_constrain_force_direction || _mode == with_support_free_force; }
+
+		void initrho2matlab(const std::string& nam);
+		void rho2matlab(const std::string& nam);
 
 		void sens2matlab(const std::string& nam);
 

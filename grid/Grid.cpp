@@ -2401,6 +2401,7 @@ size_t grid::Grid::build(
 		_gbuf.eActiveChunkSum = (int*)gm.add_buf(_name + "eActiveChunkSum", sizeof(int)*ebit._chunkSat.size(), ebit._chunkSat.data()); gbuf_size += sizeof(int) * ebit._chunkSat.size();
 		_gbuf.nword_ebits = ebit._bitArray.size();
 
+		_gbuf.init_rho_e = (float*)gm.add_buf(_name + "init_rho_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		_gbuf.coeffs = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 		_gbuf.ss_sens = (float*)gm.add_buf(_name + " ss_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 		_gbuf.drip_sens = (float*)gm.add_buf(_name + " drip_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
@@ -2887,6 +2888,15 @@ void Grid::vlexibuf2matlab(const std::string& nam, double* p_gsbuf)
 #endif
 }
 
+void Grid::initrho2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.init_rho_e, n_rho());
+}
+
+void Grid::rho2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.rho_e, n_rho());
+}
 
 void Grid::sens2matlab(const std::string& nam)
 {
