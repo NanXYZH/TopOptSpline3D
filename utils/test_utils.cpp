@@ -1070,7 +1070,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		gdiff[i] = gdiffval[i].data();
 	}
 
-	while (itn++ < 100) {
+	while (itn++ < 50) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
 		Vgoal *= (1 - params.volume_decrease);
 		Vc = Vgoal - params.volume_ratio;
@@ -1162,17 +1162,12 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
 		//mma.update(grids[0]->getCSens(), &dv.data(), v.data());
 
-		// DEBUG
-		if (itn % 5 == 0) {
-			//grids.writeDensity(grids.getPath("out.vdb"));
-			//grids.writeSensitivity(grids.getPath("sensscale.vdb"));
 
-			// write worst compliance record during optimization
-			bio::write_vector(grids.getPath("crec_iter"), cRecord);
+		// write worst compliance record during optimization
+		bio::write_vector(grids.getPath("crec_iter"), cRecord);
 
-			// write volume record during optimization
-			bio::write_vector(grids.getPath("vrec_iter"), volRecord);
-		}
+		// write volume record during optimization
+		bio::write_vector(grids.getPath("vrec_iter"), volRecord);
 
 	}
 

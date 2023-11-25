@@ -7,7 +7,7 @@
 
 int main() {
 	// ÎÄ¼þÂ·¾¶
-	std::string filenamev = "../../[2]topopt_spline/result/cube24x24x12/ordtopmma15/vrec";
+	std::string filenamev = "../../[2]topopt_spline/result/cube24x24x12/ordsplinetopmma23/vrec_iter";
 
 	std::vector<double> cRecord, volRecord;
 
@@ -17,7 +17,7 @@ int main() {
 
 	for (int i = 0; i < volRecord.size(); i++)
 	{
-		printf("--   v = %9.6lf \n", volRecord[i]);
+		printf("--  iter = %2d  v = %9.6lf \n",i + 1, volRecord[i]);
 	}
 
 	std::vector<double> fhost;
