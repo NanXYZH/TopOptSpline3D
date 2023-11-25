@@ -803,6 +803,11 @@ void initVolSens(double ratio)
 	grids[0]->init_volsens(ratio);
 }
 
+void initVolCSens(double ratio)
+{
+	grids[0]->init_volcsens(ratio);
+}
+
 void update_stencil(void)
 {
 	grids.update_stencil();

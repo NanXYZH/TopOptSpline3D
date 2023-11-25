@@ -3381,6 +3381,7 @@ void Grid::ddensity2dcoeff(void)
 	float* knotz_ = _gbuf.KnotSer[2];
 	float* rholist = _gbuf.rho_e;
 	float* rho_diff = _gbuf.g_sens;
+	float* vol_diff = _gbuf.vol_sens;
 	int* eidmap = _gbuf.eidmap;
 	int* eflag = _gbuf.eBitflag;
 
@@ -3525,6 +3526,7 @@ void Grid::ddensity2dcoeff_update(void)
 	float* knotz_ = _gbuf.KnotSer[2];
 	float* rholist = _gbuf.rho_e;
 	float* rho_diff = _gbuf.g_sens;
+	float* vol_diff = _gbuf.vol_sens;
 	int* eidmap = _gbuf.eidmap;
 	int* eflag = _gbuf.eBitflag;
 

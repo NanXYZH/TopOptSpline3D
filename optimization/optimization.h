@@ -110,6 +110,7 @@ void initDensities(double rho);
 void initCoeffs(double coeff);
 
 void initVolSens(double ratio);
+void initVolCSens(double ratio);
 
 // MARK
 

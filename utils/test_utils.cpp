@@ -656,10 +656,12 @@ void TestSuit::testOrdinaryTopopt(void)
 			rel_res = grids.v_cycle(1, 1);
 		}
 		double c = grids[0]->compliance();
-		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
+		double vol = grids[0]->volumeRatio();
+		printf("-- c = %6.4e  v = %f  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
-		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
-		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
+		cRecord.emplace_back(c); volRecord.emplace_back(vol);
+
+		if (stop_check.update(c, &vol) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
 		
 #ifdef ENABLE_HEAVISIDE
@@ -667,8 +669,9 @@ void TestSuit::testOrdinaryTopopt(void)
 		computeSensitivity2(para_beta);
 		// update density
 		updateDensities2(Vgoal, para_beta, change);
+		
 		printf("-- max design variable change = %6.4f \n", change[0]);
-		if ((change[1] < change_tol || itn % 5 == 0) && para_beta < 256)
+		if ((change[1] < change_tol || itn % 5 == 0) && para_beta < 64)
 		{
 			para_beta = para_beta * 2;
 			std::cout << "-- current beta: " << para_beta << std::endl;
@@ -764,7 +767,7 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 #ifdef ENABLE_HEAVISIDE
 		// MARK to compare rho to update para_beta
 		
-		if (itn % 10 == 0 && itn > 2 && para_beta < 128)
+		if (itn % 10 == 0 && itn > 2 && para_beta < 32)
 		{
 			para_beta = para_beta * 2;
 		}
@@ -804,14 +807,14 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 		// update density
 		scaleVector(grids[0]->getSens(), grids[0]->n_gselements, sensScale);
 
-		gpu_manager_t::pass_dev_buf_to_matlab("sens", grids[0]->getSens(), grids[0]->n_gselements);
+		gpu_manager_t::pass_dev_buf_to_matlab("sensscale", grids[0]->getSens(), grids[0]->n_gselements);
 
 		mma.update(grids[0]->getSens(), &dv.data(), v.data());
 
 		// DEBUG
 		if (itn % 5 == 0) {
 			grids.writeDensity(grids.getPath("out.vdb"));
-			grids.writeSensitivity(grids.getPath("sens.vdb"));
+			grids.writeSensitivity(grids.getPath("sensscale.vdb"));
 		}
 	}
 
@@ -869,7 +872,7 @@ void TestSuit::testOrdinarySplineTopopt(void)
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 
-	snippet::converge_criteria stop_check(1, 10, 1e-4);
+	snippet::converge_criteria stop_check(1, 5, 1e-4);
 
 	std::vector<double> cRecord, volRecord;
 
@@ -889,13 +892,14 @@ void TestSuit::testOrdinarySplineTopopt(void)
 		double rel_res = 1;
 		int femit = 0;
 		while (rel_res > 1e-3 && femit++ < 50) {
-			rel_res = grids.v_cycle(1, 1);
+			rel_res = grids.v_cycle(5, 5);
 		}
 		double c = grids[0]->compliance();
+		double vol = grids[0]->volumeRatio();
+		printf("-- c = %6.4e  v = %f  r = %4.2lf%%\n", c, vol, rel_res * 100);
 
 		grids.writeDisplacement(grids.getPath("ulast"));
 
-		printf("-- c = %6.4e   r = %4.2lf%%\n", c, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
 		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
 		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
@@ -1043,7 +1047,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 #ifdef ENABLE_HEAVISIDE
 		// MARK to compare rho to update para_beta
 
-		if (itn % 10 == 0 && itn > 2 && para_beta < 128)
+		if (itn % 10 == 0 && itn > 2 && para_beta < 32)
 		{
 			para_beta = para_beta * 2;
 		}
@@ -1078,7 +1082,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		printf("-- c = %6.4e  v = %4.3lf  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
-		cRecord.emplace_back(c); volRecord.emplace_back(Vgoal);
+		cRecord.emplace_back(c); volRecord.emplace_back(vol);
 		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
 
@@ -1094,12 +1098,12 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		scaleVector(grids[0]->getVolCSens(), grids[0]->n_cijk(), volScale);
 
 		//// just for testing the form of getVolSens input is OK
-		//initVolSens(1);
-		//gpu_manager_t::pass_dev_buf_to_matlab("volsens11", grids[0]->getVolSens(), grids[0]->n_cijk());
+		//initVolCSens(1);
+		//gpu_manager_t::pass_dev_buf_to_matlab("volsens11", grids[0]->getVolCSens(), grids[0]->n_cijk());
 		//scaleVector(grids[0]->getVolSens(), grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 
-		gpu_manager_t::pass_dev_buf_to_matlab("csens", grids[0]->getCSens(), grids[0]->n_cijk());
-		gpu_manager_t::pass_dev_buf_to_matlab("volcsens", grids[0]->getVolCSens(), grids[0]->n_cijk());
+		gpu_manager_t::pass_dev_buf_to_matlab("csensscale", grids[0]->getCSens(), grids[0]->n_cijk());
+		gpu_manager_t::pass_dev_buf_to_matlab("volcsensscale", grids[0]->getVolCSens(), grids[0]->n_cijk());
 
 		// compute difference of current g
 		for (int i = 0; i < n_constraint; i++) {

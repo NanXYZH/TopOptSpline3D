@@ -260,7 +260,7 @@ void computeSensitivity2(float beta) {
 	// init dvol/dexPhys to 1/N
 	float dvol2dexPhys = 1.0 / grids[0]->n_rho();
 	init_array(grids[0]->getVolSens(), dvol2dexPhys, grids[0]->n_rho());
-	grids[0]->csens2matlab("volsens");
+	grids[0]->Volsens2matlab("volsens");
 
 	// project sensitivity
 #ifdef ENABLE_HEAVISIDE
