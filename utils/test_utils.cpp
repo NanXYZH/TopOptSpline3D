@@ -736,7 +736,7 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 #endif
 
 	int itn = 0;
-
+	int n_constraint = 1;
 	snippet::converge_criteria stop_check(1, 5, 1e-3);
 
 	std::vector<double> cRecord, volRecord;
@@ -751,6 +751,14 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 	float sensScale = 1e5;
 	gv::gVector dv(grids[0]->n_gselements, volScale / grids[0]->n_gselements);
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
+
+	gv::gVector gval(n_constraint);
+	std::vector<gv::gVector> gdiffval(n_constraint);
+	std::vector<float*> gdiff(n_constraint);
+	for (int i = 0; i < n_constraint; i++) {
+		gdiffval[i] = gv::gVector(grids[0]->n_rho());
+		gdiff[i] = gdiffval[i].data();
+	}
 
 	while (itn++ < 100) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
@@ -803,13 +811,44 @@ void TestSuit::testOrdinaryTopoptMMA(void)
 		// compute sensitivity
 		computeSensitivity();
 #endif
-		
+
 		// update density
-		scaleVector(grids[0]->getSens(), grids[0]->n_gselements, sensScale);
+		scaleVector(grids[0]->getSens(), grids[0]->n_rho(), sensScale);
+		//scaleVector(grids[0]->getVolSens(), grids[0]->n_rho(), volScale);
 
-		gpu_manager_t::pass_dev_buf_to_matlab("sensscale", grids[0]->getSens(), grids[0]->n_gselements);
+		// just for testing the form of getVolSens input is OK
+		initVolSens(1);
+		gpu_manager_t::pass_dev_buf_to_matlab("volsens11", grids[0]->getVolSens(), grids[0]->n_rho());
+		scaleVector(grids[0]->getVolSens(), grids[0]->n_rho(), volScale / grids[0]->n_rho());
 
-		mma.update(grids[0]->getSens(), &dv.data(), v.data());
+		gpu_manager_t::pass_dev_buf_to_matlab("sensscale", grids[0]->getSens(), grids[0]->n_rho());
+		gpu_manager_t::pass_dev_buf_to_matlab("volsensscale", grids[0]->getVolSens(), grids[0]->n_rho());
+
+		//// compute difference of current g
+		//for (int i = 0; i < n_constraint; i++) {
+		//	gdiffval[i] = gv::gVector(grids[0]->n_rho());
+		//	gdiff[i] = gdiffval[i].data();
+		//}
+
+		//gdiffval[0] = dv;
+		//gdiff[0] = gdiffval[0].data();
+		gdiff[0] = grids[0]->getVolSens();
+		gval[0] = volScale * (vol - params.volume_ratio);
+		//gval[0] = v[0];
+
+		//std::cout << "-- TEST v[0]  : "<< v[0] << std::endl;
+		//std::cout << "-- TEST gv[0] :" << gval[0] << std::endl;
+
+		//// compute current constrain value 
+		//for (int i = 0; i < n_constraint; i++) {
+		//	gval[0] = v[0];
+		//	std::cout << gval[0] << std::endl;
+		//}
+
+		mma.update(grids[0]->getSens(), gdiff.data(), gval.data());
+		//mma.update(grids[0]->getSens(), &dv.data(), gval.data());
+
+		//mma.update(grids[0]->getSens(), &dv.data(), v.data());
 
 		// DEBUG
 		if (itn % 5 == 0) {
@@ -1006,7 +1045,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 
-	snippet::converge_criteria stop_check(1, 10, 1e-4);
+	snippet::converge_criteria stop_check(1, 5, 1e-3);
 
 	std::vector<double> cRecord, volRecord;
 
@@ -1018,12 +1057,11 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float volScale = 1e3;
-	float sensScale = 1e5;
+	float volScale = 1e2;
+	float sensScale = 1e4;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
-	gv::gVector fdiff(grids[0]->n_cijk());
 	gv::gVector gval(n_constraint);
 	std::vector<gv::gVector> gdiffval(n_constraint);
 	std::vector<float*> gdiff(n_constraint);
@@ -1083,7 +1121,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		printf("-- c = %6.4e  v = %4.3lf  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
 		cRecord.emplace_back(c); volRecord.emplace_back(vol);
-		if (stop_check.update(c, &Vc) && Vgoal <= params.volume_ratio) break;
+		if (stop_check.update(c, &vol) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
 
 #ifdef ENABLE_HEAVISIDE
@@ -1100,24 +1138,41 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		//// just for testing the form of getVolSens input is OK
 		//initVolCSens(1);
 		//gpu_manager_t::pass_dev_buf_to_matlab("volsens11", grids[0]->getVolCSens(), grids[0]->n_cijk());
-		//scaleVector(grids[0]->getVolSens(), grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
+		//scaleVector(grids[0]->getVolCSens(), grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 
 		gpu_manager_t::pass_dev_buf_to_matlab("csensscale", grids[0]->getCSens(), grids[0]->n_cijk());
 		gpu_manager_t::pass_dev_buf_to_matlab("volcsensscale", grids[0]->getVolCSens(), grids[0]->n_cijk());
 
-		// compute difference of current g
-		for (int i = 0; i < n_constraint; i++) {
-			//gdiffval[i] = dv;
-			gdiff[i] = grids[0]->getVolCSens();
-		}
+		//// compute difference of current g
+		//for (int i = 0; i < n_constraint; i++) {
+		//	//gdiffval[0] = dv;
+		//	gdiff[0] = grids[0]->getVolCSens();
+		//}
 
-		// compute current constrain value 
-		for (int i = 0; i < n_constraint; i++) {
-			gval[i] = v[0];
-		}
+		//// compute current constrain value 
+		//for (int i = 0; i < n_constraint; i++) {
+		//	gval[0] = v[0];                                               // not right !!!
+		//}
+
+		gdiff[0] = grids[0]->getVolCSens();
+		gval[0] = volScale * (vol - params.volume_ratio);                 // fixed !!!
+		std::cout << "-- TEST v[0]  : " << v[0] << std::endl;
+		std::cout << "-- TEST gv[0] : " << gval[0] << std::endl;
 
 		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
 		//mma.update(grids[0]->getCSens(), &dv.data(), v.data());
+
+		// DEBUG
+		if (itn % 5 == 0) {
+			//grids.writeDensity(grids.getPath("out.vdb"));
+			//grids.writeSensitivity(grids.getPath("sensscale.vdb"));
+
+			// write worst compliance record during optimization
+			bio::write_vector(grids.getPath("crec_iter"), cRecord);
+
+			// write volume record during optimization
+			bio::write_vector(grids.getPath("vrec_iter"), volRecord);
+		}
 
 	}
 

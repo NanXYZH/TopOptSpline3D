@@ -22,7 +22,7 @@ int main(int argc, char** argv)
 	version_info();
 	init_cuda();
 	//MMA::test_mma();
-	testMarchingCube();
+	//testMarchingCube();
 
 	//cgalTest();
 	selfTest();

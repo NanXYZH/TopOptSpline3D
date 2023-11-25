@@ -166,7 +166,7 @@ namespace MMA {
 
 	void test_mma(void) {
 		// test 1-dim
-		if (1)
+		if (0)
 		{
 			printf("[CASE 1] MMA TESTING of 1 dim with 1 constrain \n");
 			auto f = [](Scalar x) {
@@ -213,7 +213,7 @@ namespace MMA {
 		}
 
 		// re write test 1-dim
-		if (1)
+		if (0)
 		{
 			printf("[CASE 2] MMA TESTING of 1 dim with 1 constrain \n");
 			auto f = [](Scalar x) {
@@ -362,6 +362,9 @@ namespace MMA {
 				// compute current constrain value 
 				auto gv = g(cur_x[0], cur_x[1]);
 				for (int i = 0; i < gv.size(); i++) {
+					//gv::gVector tmp(1);
+					//tmp[0] = gv[i];
+					//gval[i] = tmp[0];
 					gval[i] = gv[i];
 				}
 
@@ -369,6 +372,12 @@ namespace MMA {
 				printf("      %f,\n", gv[1]);
 				printf("      %f,\n", gv[2]);
 				printf("      %f ]\n", gv[3]);
+
+				printf("g = [ %f,\n", gval[0]);
+				printf("      %f,\n", gval[1]);
+				printf("      %f,\n", gval[2]);
+				printf("      %f ]\n", gval[3]);
+
 
 				if (solver.update(fdiff.data(), gdiff.data(), gval.data())) {
 					break;

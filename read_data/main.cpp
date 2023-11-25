@@ -7,11 +7,11 @@
 
 int main() {
 	// 文件路径
-	std::string filename = "../../[2]topopt_spline/result/cube24x24x12/ordsplinetopmma19/c";
+	std::string filenamev = "../../[2]topopt_spline/result/cube24x24x12/ordtopmma15/vrec";
 
 	std::vector<double> cRecord, volRecord;
 
-	bio::read_vector(filename, volRecord);
+	bio::read_vector(filenamev, volRecord);
 
 	std::cout << volRecord.size() << std::endl;
 
@@ -21,9 +21,9 @@ int main() {
 	}
 
 	std::vector<double> fhost;
-	bool suc = bio::read_vector(filename, fhost);
+	bool suc = bio::read_vector(filenamev, fhost);
 	if (!suc) {
-		printf("\033[31mFailed to open file %s \n\033[0m", filename.c_str());
+		printf("\033[31mFailed to open file %s \n\033[0m", filenamev.c_str());
 		throw std::runtime_error("error open file");
 	}
 	//if (fhost.size() != n_gsvertices * 3) {
@@ -33,11 +33,11 @@ int main() {
 	//}
 
 	// 打开文件
-	std::ifstream file(filename, std::ios::binary);
+	std::ifstream file(filenamev, std::ios::binary);
 
 	// 检查文件是否成功打开
 	if (!file.is_open()) {
-		std::cerr << "Failed to open file: " << filename << std::endl;
+		std::cerr << "Failed to open file: " << filenamev << std::endl;
 		return 1;
 	}
 
