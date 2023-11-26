@@ -3984,6 +3984,8 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 	gpu_manager_t::pass_buf_to_matlab("bgnodex", bgnode_x.data(), ereso3);
 	gpu_manager_t::pass_buf_to_matlab("bgnodey", bgnode_y.data(), ereso3);
 	gpu_manager_t::pass_buf_to_matlab("bgnodez", bgnode_z.data(), ereso3);
+	delete[] rhohost;
+	rhohost = nullptr;
 #endif
 
 	cudaFree(node_value);
@@ -3994,8 +3996,6 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 	nodex = nullptr;
 	nodey = nullptr;
 	nodez = nullptr;
-	delete[] rhohost;
-	rhohost = nullptr;
 }
 
 template<typename WeightRadius>
