@@ -244,15 +244,6 @@ void HierarchyGrid::buildAABBTree(const std::vector<float>& pcoords, const std::
 		xm.minimize(x);
 		xM.maximize(x);
 	}
-	//mesh_entity = inputmesh;
-	//float scale_ratio = 1.0f;
-
-	//for (auto& vt : mesh_entity.vertices()) {
-	//	mesh_entity.set_point(vt, mesh_entity.point(vt) * scale_ratio);
-	//}
-	//mesh_entity.request_face_normals();
-	//mesh_entity.request_vertex_normals();
-	//mesh_entity.update_normals();
 	omesh = inputmesh;
 	printf("--[TEST] openmesh model bounding box : [%f, %f, %f] -- [%f, %f, %f]\n", xm[0], xm[1], xm[2], xM[0], xM[1], xM[2]);
 }
@@ -2404,9 +2395,9 @@ size_t grid::Grid::build(
 		_gbuf.init_rho_e = (float*)gm.add_buf(_name + "init_rho_e ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
 		_gbuf.coeffs = (float*)gm.add_buf(_name + " coeff ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 
-		_gbuf.ss_sens = (float*)gm.add_buf(_name + "ss_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.ss_sens = (float*)gm.add_buf(_name + "ss_sens ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.ssc_sens = (float*)gm.add_buf(_name + " ssc_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
-		_gbuf.drip_sens = (float*)gm.add_buf(_name + "drip_sens ", sizeof(float) * ne_gs); gbuf_size += sizeof(float) * ne_gs;
+		_gbuf.drip_sens = (float*)gm.add_buf(_name + "drip_sens ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
 		_gbuf.dripc_sens = (float*)gm.add_buf(_name + " dripc_sens ", sizeof(float) * n_im * n_in * n_il); gbuf_size += sizeof(float) * n_im * n_in * n_il;
 
 		_gbuf.surface_point_buf = (float*)gm.add_buf(_name + " ss_buf ", sizeof(float) * _num_surface_points); gbuf_size += sizeof(float) * _num_surface_points;
@@ -2924,7 +2915,7 @@ void Grid::Volcsens2matlab(const std::string& nam)
 
 void Grid::SSsens2matlab(const std::string& nam)
 {
-	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.ss_sens, n_rho());
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.ss_sens, n_surf_points());
 }
 
 void Grid::SScsens2matlab(const std::string& nam)
@@ -2934,7 +2925,7 @@ void Grid::SScsens2matlab(const std::string& nam)
 
 void Grid::Dripsens2matlab(const std::string& nam)
 {
-	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.drip_sens, n_rho());
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.drip_sens, n_surf_points());
 }
 
 void Grid::Dripcsens2matlab(const std::string& nam)
@@ -3210,6 +3201,7 @@ void Grid::compute_surface_nodes_in_model(std::vector<float>& surface_node_x, st
 			reduced_surf_nodes[2].push_back(surface_node_z[j]);
 		}
 	}
+
 #ifdef  ENABLE_MATLAB
 	Eigen::Matrix<float, -1, 1> surf_x1, surf_y1, surf_z1;
 	surf_x1.resize(reduced_surf_nodes[0].size());
@@ -3323,47 +3315,49 @@ void Grid::compute_surface_nodes_in_model(std::vector<float>& surface_node_x, st
 		memcpy(random_list.data(), equidistantIntegers.data(), sizeof(int) * num_surface_points);
 		eigen2ConnectedMatlab("step_list2", random_list);
 #endif
-		surface_node_x = vert_final[0];
-		surface_node_y = vert_final[1];
-		surface_node_z = vert_final[2];
+	}
+
+	surface_node_x = vert_final[0];
+	surface_node_y = vert_final[1];
+	surface_node_z = vert_final[2];
 
 #ifdef  ENABLE_MATLAB
-		Eigen::Matrix<float, -1, 1> surf_x, surf_y, surf_z;
-		surf_x.resize(surface_node_x.size());
-		surf_y.resize(surface_node_y.size());
-		surf_z.resize(surface_node_z.size());
-		memcpy(surf_x.data(), surface_node_x.data(), sizeof(float) * surface_node_x.size());
-		memcpy(surf_y.data(), surface_node_y.data(), sizeof(float) * surface_node_y.size());
-		memcpy(surf_z.data(), surface_node_z.data(), sizeof(float) * surface_node_z.size());
-		eigen2ConnectedMatlab("surf_x", surf_x);
-		eigen2ConnectedMatlab("surf_y", surf_y);
-		eigen2ConnectedMatlab("surf_z", surf_z);
+	Eigen::Matrix<float, -1, 1> surf_x, surf_y, surf_z;
+	surf_x.resize(surface_node_x.size());
+	surf_y.resize(surface_node_y.size());
+	surf_z.resize(surface_node_z.size());
+	memcpy(surf_x.data(), surface_node_x.data(), sizeof(float)* surface_node_x.size());
+	memcpy(surf_y.data(), surface_node_y.data(), sizeof(float)* surface_node_y.size());
+	memcpy(surf_z.data(), surface_node_z.data(), sizeof(float)* surface_node_z.size());
+	eigen2ConnectedMatlab("surf_x", surf_x);
+	eigen2ConnectedMatlab("surf_y", surf_y);
+	eigen2ConnectedMatlab("surf_z", surf_z);
 #endif
 
-		std::vector<float>().swap(tmp_x);
-		std::vector<float>().swap(tmp_y);
-		std::vector<float>().swap(tmp_z);
-		for (int i = 0; i < 3; i++)
-		{
-			std::vector<float>().swap(vert_final[i]);
-		}
+	std::vector<float>().swap(tmp_x);
+	std::vector<float>().swap(tmp_y);
+	std::vector<float>().swap(tmp_z);
+	for (int i = 0; i < 3; i++)
+	{
+		std::vector<float>().swap(vert_final[i]);
 	}
 }
 
-void Grid::generate_spline_surface_nodes(void)
+void Grid::generate_spline_surface_nodes(float beta)
 {
 	std::vector<float> mcPoints_val;
 	std::vector<float> bgnodex;
 	std::vector<float> bgnodey;
 	std::vector<float> bgnodez;
 	int cur_ereso = _ereso / 2;
-	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val, cur_ereso);
+	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val, cur_ereso, beta);
 
 	std::vector<float> bgnode[3];
 	bgnode[0].insert(bgnode[0].end(), bgnodex.begin(), bgnodex.end());
 	bgnode[1].insert(bgnode[1].end(), bgnodey.begin(), bgnodey.end());
 	bgnode[2].insert(bgnode[2].end(), bgnodez.begin(), bgnodez.end());
-	int ereso3 = cur_ereso * cur_ereso * cur_ereso;
+	//int ereso3 = cur_ereso * cur_ereso * cur_ereso;
+	int ereso3 = bgnodex.size();
 #ifdef ENABLE_MATLAB
 	Eigen::Matrix<float, -1, 1> node_value;
 	node_value.resize(ereso3, 1);
@@ -3371,14 +3365,17 @@ void Grid::generate_spline_surface_nodes(void)
 	eigen2ConnectedMatlab("rhomc1", node_value);
 #endif
 
-	int N[3] = { cur_ereso, cur_ereso, cur_ereso };
+	int N[3] = { cur_ereso + 2, cur_ereso + 2, cur_ereso + 2 };
 	// MARK[TOCHECK] sometime crash in mc points generation
 	generate_surface_nodes_by_MC(_meshfile, N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode, mcPoints_val);
 	std::cout << "spline surface node number (after marching cube): " << spline_surface_node->size() << std::endl;
-	pass_spline_surf_node2matlab();
 
 	compute_surface_nodes_in_model(spline_surface_node[0], spline_surface_node[1], spline_surface_node[2]);
 	std::cout << "spline surface node number (in model): " << spline_surface_node->size() << std::endl;
+
+#ifdef ENABLE_MATLAB
+	pass_spline_surf_node2matlab();
+#endif
 }
 
 
@@ -3535,7 +3532,20 @@ void grid::Grid::scale_spline_selfsupp_constraint_dcoeff(void)
 	{
 		count = count_surface_points();
 	}
-	std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
-	scaleVector(getSSSens(), spline_surface_node->size(), 1 / count);
-	SSsens2matlab("ss_sens3");
+	//std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
+	scaleVector(getSSCSens(), spline_surface_node->size(), 1 / count);
+	SScsens2matlab("ssc_sens3");
+}
+
+void grid::Grid::scale_spline_drip_constraint_dcoeff(void)
+{
+	float count = spline_surface_node->size();
+	int modeid = _ssmode;
+	if (modeid % 2 == 0) // only nz < 0
+	{
+		count = count_surface_points();
+	}
+	//std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
+	scaleVector(getDripCSens(), spline_surface_node->size(), 1 / count);
+	SScsens2matlab("dripc_sens3");
 }

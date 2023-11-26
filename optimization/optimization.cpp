@@ -808,6 +808,16 @@ void initVolCSens(double ratio)
 	grids[0]->init_volcsens(ratio);
 }
 
+void initSSCSens(double sens)
+{
+	grids[0]->init_sscsens(sens);
+}
+
+void initDripCSens(double sens)
+{
+	grids[0]->init_dripcsens(sens);
+}
+
 void update_stencil(void)
 {
 	grids.update_stencil();
@@ -829,4 +839,28 @@ void test_rigid_displacement(void) {
 
 void cgalTest(void) {
 	grids.cgalTest();
+}
+
+void deal_surface_points(float beta) {
+	// update surface points in CPU
+	grids[0]->generate_spline_surface_nodes(beta);
+	// CPU 2 GPU
+	grids[0]->uploadSurfacePoints();
+	grids[0]->uploadSurfacePointsSymbol();
+	grids[0]->uploadSymbol2device();
+
+	grids[0]->compute_spline_surface_point_normal();
+	float direction = grids[0]->correct_spline_surface_point_normal_direction(beta); // mark false
+	grids[0]->compute_selfsupp_flag_actual();
+	grids[0]->compute_selfsupp_flag_virtual();
+
+	grids[0]->compute_spline_selfsupp_constraint();
+	grids[0]->compute_spline_selfsupp_constraint_dcoeff();
+	// * 1 / num_constraint
+	grids[0]->scale_spline_selfsupp_constraint_dcoeff();
+
+	grids[0]->compute_spline_drip_constraint();
+	grids[0]->compute_spline_drip_constraint_dcoeff();
+	// * 1 / num_constraint
+	grids[0]->scale_spline_drip_constraint_dcoeff();
 }

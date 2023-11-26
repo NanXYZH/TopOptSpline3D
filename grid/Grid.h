@@ -4,6 +4,7 @@
 #define GRID_H
 
 #define ENABLE_HEAVISIDE
+#define ENABLE_SELFSUPPORT
 
 //#include "fast_marching_method.hpp"
 #include "voxelizer.h"
@@ -561,7 +562,7 @@ namespace grid {
 
 		void resetDirchlet(double* v_dev[3]);
 
-		void generate_spline_surface_nodes(void);
+		void generate_spline_surface_nodes(float beta);
 
 		void generate_surface_nodes_by_MC(const std::string& fileName, int Nodes[3], std::vector<float>& surface_node_x, std::vector<float>& surface_node_y, std::vector<float>& surface_node_z, std::vector<float> bg_node[3], std::vector<float> mcPoints_in);
 
@@ -587,6 +588,8 @@ namespace grid {
 
 		void init_volsens(double ratio);
 		void init_volcsens(double ratio);
+		void init_sscsens(double sens);
+		void init_dripcsens(double sens);
 
 		void init_rholist(float* rh0);
 
@@ -634,20 +637,24 @@ namespace grid {
 
 		void dvol2dcoeff(void);            // dVol/dc = dVol/drho * drho/dcijk    
 
-		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso);
+		void compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso, float beta);
 
 		// constraint
 		void compute_spline_surface_point_normal(void);
-		void correct_spline_surface_point_normal_direction(void);
+		float correct_spline_surface_point_normal_direction(float beta);
 		void compute_selfsupp_flag_actual(void);
 		void compute_selfsupp_flag_virtual(void);
 
 		void compute_spline_selfsupp_constraint(void);
+		void compute_spline_drip_constraint(void);
 		float global_selfsupp_constraint(void);
+		float global_drip_constraint(void);
 		void compute_spline_selfsupp_constraint_dcoeff(void);
+		void compute_spline_drip_constraint_dcoeff(void);
 		float count_surface_points(void);
 		void scaleVector(float* p_data, size_t len, float scale);
 		void scale_spline_selfsupp_constraint_dcoeff(void);
+		void scale_spline_drip_constraint_dcoeff(void);
 		
 		//[MARK] : may gather them -- > not use
 		void compute_spline_surface_point_normal_dcoeff(void);

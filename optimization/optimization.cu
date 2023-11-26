@@ -555,8 +555,6 @@ float updateDensities2(float Vgoal, float beta, float change[2]) {
 	return g_thres;
 }
 
-
-
 __global__ void tryCSensMultiplier_kernel(
 	int nc, const float* cijklist, float* c_sens, float c_thres, float step, float damp, float cijkmin, float cijkmax, float* newcijk) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;

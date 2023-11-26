@@ -147,23 +147,22 @@ void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, s
 	mcPoints.clear();
 	int n = bg_node->size();
 	mcPoints.resize(n);
-	for (int i = 0; i < n; i++)
+	if (mcPoints_inner_val.size() == bg_node->size())
 	{
-		mp4vector verr(bg_node[0][i], bg_node[1][i], bg_node[2][i], mcPoints_inner_val[i]);
-		mcPoints[i] = verr;
+		for (int i = 0; i < n; i++)
+		{
+			mp4vector verr(bg_node[0][i], bg_node[1][i], bg_node[2][i], mcPoints_inner_val[i]);
+			mcPoints[i] = verr;
+		}
 	}
 	
 	if (mcPoints.size() == 0)
 	{
 		return;
 	}
-	std::cout << "(" << nX << ", " << nY << ", " << nZ << ") " << nX * nY * nZ << std::endl;
-	std::cout << mcPoints_inner_val.size() << std::endl;
-	std::cout << bg_node->size() << std::endl;
 	//delete[] Triangles;	  //first free the previous allocated memory
 	//Triangles = nullptr;
 	Triangles = MarchingCubes(nX - 1, nY - 1, nZ - 1, 1.0, 1.0, 1.0, minValuePotential, mcPoints, numOfTriangles);
-	//std::cout << "Marching cube test \n" << "Surface node number:" << mcPoints.size() << std::endl;
 	int num = 0;
 	for (int i = 0; i < mcPoints.size(); i++)
 	{
@@ -172,10 +171,8 @@ void MCImplicitRender::RunMarchingCubesTestPotential(float& minValuePotential, s
 			//std::cout << mcPoints[i].x << "," << mcPoints[i].y << "," << mcPoints[i].z << "," << mcPoints[i].val << "," << std::endl;
 			num++;
 		}
-		//std::cout << mcPoints[i].x << "," << mcPoints[i].y << "," << mcPoints[i].z << "," << mcPoints[i].val << "," << std::endl;
 	}
-	std::cout << "sample nodes number: " << num  << "/" << mcPoints.size() << std::endl;
-	std::cout << "-=-=-=-=-=-=-=-=-=-=-=-=-=-" << std::endl;
+	std::cout << "-- sample nodes number : " << num  << "/" << mcPoints.size() << "(" << nX << ", " << nY << ", " << nZ << ") " << std::endl;
 	mcPoints.clear();
 }
 

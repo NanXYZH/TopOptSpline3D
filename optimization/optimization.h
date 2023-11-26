@@ -111,10 +111,14 @@ void initCoeffs(double coeff);
 
 void initVolSens(double ratio);
 void initVolCSens(double ratio);
+void initSSCSens(double sens);
+void initDripCSens(double sens);
 
 // MARK
 
 void update_stencil(void);
+
+void deal_surface_points(float beta);
 
 void test_rigid_displacement(void);
 

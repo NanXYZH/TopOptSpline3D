@@ -1014,51 +1014,28 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	//grids[0]->rho2matlab("rhopj");
 #endif
 
-	// for surface points test
-	if (grids.areALLCoeffsEqual())
-	{
-		std::cout << "-- [Same Coeff cannot extra surface points] --" << std::endl;
-	}
-	else
-	{
-		std::cout << "-- [Deal with surface points] --" << std::endl;
-		grids[0]->generate_spline_surface_nodes();
-		grids[0]->uploadSurfacePoints();
-		grids[0]->uploadSurfacePointsSymbol();
-		grids[0]->uploadSymbol2device();
-
-		grids[0]->compute_spline_surface_point_normal();
-		grids[0]->correct_spline_surface_point_normal_direction(); // mark false
-		grids[0]->compute_selfsupp_flag_actual();
-		grids[0]->compute_selfsupp_flag_virtual();
-
-		grids[0]->compute_spline_selfsupp_constraint();
-		float ss_value = grids[0]->global_selfsupp_constraint();
-		std::cout << "--[TEST] SS value: " << ss_value << std::endl;
-
-		grids[0]->compute_spline_selfsupp_constraint_dcoeff();
-		// * 1 / num_constraint
-		grids[0]->scale_spline_selfsupp_constraint_dcoeff();
-	}
-
 	// end
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
 	int itn = 0;
 
 	snippet::converge_criteria stop_check(1, 5, 1e-3);
 
-	std::vector<double> cRecord, volRecord;
+	std::vector<double> cRecord, volRecord, ssRecord, dripRecord;
 
 	double Vc = Vgoal - params.volume_ratio;
 
 	std::vector<float> tmodipm;
 
 	int n_constraint = 1;
+
+#ifdef ENABLE_SELFSUPPORT
+	n_constraint = 3;
+#endif
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float volScale = 1e2;
-	float sensScale = 1e4;
+	float volScale = 1e3;
+	float sensScale = 1e5;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -1083,29 +1060,20 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		grids[0]->coeff2density();
 
 #ifdef ENABLE_HEAVISIDE
-		// MARK to compare rho to update para_beta
-
-		if (itn % 10 == 0 && itn > 2 && para_beta < 32)
-		{
-			para_beta = para_beta * 2;
-		}
 		projectDensities(para_beta);
 		grids[0]->initrho2matlab("rhoinit");
 		grids[0]->rho2matlab("rhopj");
 #endif
 
 		// compute volume 
-		// MARK[TODO] : how to add changing volume ratio in MMA (OK)
 		double vol = grids[0]->volumeRatio();
 		v[0] = volScale * (vol - params.volume_ratio);
 
+		double ss_value = 0.0;
+		double drip_value = 0.0;
+
 		// update numeric stencil after density changed
 		update_stencil();
-
-		//// update surface points in CPU
-		//grids[0]->generate_spline_surface_nodes();
-		//// CPU 2 GPU
-		//grids[0]->uploadSurfacePoints();
 
 		// solve displacement 
 		//double c = grids.solveFEM();
@@ -1118,17 +1086,44 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		grids.writeDisplacement(grids.getPath("ulast"));
 
+#ifdef ENABLE_SELFSUPPORT
+		if (grids.areALLCoeffsEqual())
+		{
+			std::cout << "\033[34m-- [Same Coeff cannot extra surface points] --\033[0m" << std::endl;
+			initSSCSens(float{ 0.0 });
+			initDripCSens(float{ 0.0 });
+			ss_value = 1.0;
+			drip_value = 1.0;
+		}
+		else if(itn < 15)
+		{
+			std::cout << "\033[34m-- [Optimization of Coeffs without self-supporting] --\033[0m" << std::endl;
+			initSSCSens(float{ 0.0 });
+			initDripCSens(float{ 0.0 });
+			ss_value = 1.0;
+			drip_value = 1.0;
+		}
+		else
+		{
+			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;
+			deal_surface_points(para_beta);
+			ss_value = grids[0]->global_selfsupp_constraint();
+			std::cout << "--[TEST] SS value : " << ss_value << std::endl;
+			drip_value = grids[0]->global_drip_constraint();
+			std::cout << "--[TEST] DRIP value : " << drip_value << std::endl;
+		}
+#endif
+
 		printf("-- c = %6.4e  v = %4.3lf  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
-		cRecord.emplace_back(c); volRecord.emplace_back(vol);
+		cRecord.emplace_back(c); volRecord.emplace_back(vol); ssRecord.emplace_back(ss_value); dripRecord.emplace_back(drip_value);
 		if (stop_check.update(c, &vol) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
 
-#ifdef ENABLE_HEAVISIDE
 		// compute sensitivity
+#ifdef ENABLE_HEAVISIDE
 		computeSensitivity2(para_beta);
 #else
-		// compute sensitivity
 		computeSensitivity();
 #endif
 
@@ -1142,33 +1137,35 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		gpu_manager_t::pass_dev_buf_to_matlab("csensscale", grids[0]->getCSens(), grids[0]->n_cijk());
 		gpu_manager_t::pass_dev_buf_to_matlab("volcsensscale", grids[0]->getVolCSens(), grids[0]->n_cijk());
-
-		//// compute difference of current g
-		//for (int i = 0; i < n_constraint; i++) {
-		//	//gdiffval[0] = dv;
-		//	gdiff[0] = grids[0]->getVolCSens();
-		//}
-
-		//// compute current constrain value 
-		//for (int i = 0; i < n_constraint; i++) {
-		//	gval[0] = v[0];                                               // not right !!!
-		//}
+		gpu_manager_t::pass_dev_buf_to_matlab("sscsensscale", grids[0]->getSSCSens(), grids[0]->n_cijk());
+		gpu_manager_t::pass_dev_buf_to_matlab("dripcsensscale", grids[0]->getDripCSens(), grids[0]->n_cijk());
 
 		gdiff[0] = grids[0]->getVolCSens();
-		gval[0] = volScale * (vol - params.volume_ratio);                 // fixed !!!
-		std::cout << "-- TEST v[0]  : " << v[0] << std::endl;
+		gval[0] = volScale * (vol - params.volume_ratio);                 // corrected !!!
 		std::cout << "-- TEST gv[0] : " << gval[0] << std::endl;
 
+#ifdef ENABLE_SELFSUPPORT
+		gdiff[1] = grids[0]->getSSCSens();
+		gval[1] = ss_value - 1;
+		std::cout << "-- TEST gv[1] : " << gval[1] << std::endl;
+		gdiff[2] = grids[0]->getDripCSens();
+		gval[2] = drip_value - 1;
+		std::cout << "-- TEST gv[2] : " << gval[2] << std::endl;
+#endif
+
 		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
-		//mma.update(grids[0]->getCSens(), &dv.data(), v.data());
 
+#ifdef ENABLE_HEAVISIDE
+		if (itn % 10 == 0 && itn > 2 && para_beta < 32)
+		{
+			para_beta = para_beta * 2;
+		}
+#endif
 
-		// write worst compliance record during optimization
 		bio::write_vector(grids.getPath("crec_iter"), cRecord);
-
-		// write volume record during optimization
 		bio::write_vector(grids.getPath("vrec_iter"), volRecord);
-
+		bio::write_vector(grids.getPath("ssrec_iter"), ssRecord);
+		bio::write_vector(grids.getPath("driprec_iter"), dripRecord);
 	}
 
 	printf("\n=   finished   =\n");
@@ -1181,6 +1178,8 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 	// write volume record during optimization
 	bio::write_vector(grids.getPath("vrec"), volRecord);
+	bio::write_vector(grids.getPath("ssrec"), ssRecord);
+	bio::write_vector(grids.getPath("driprec"), dripRecord);
 }
 
 std::pair<double, Eigen::VectorXd> SpectraFindLargestEigenPair(const Eigen::MatrixXd& mat) {

@@ -66,11 +66,13 @@ extern __constant__ double* gLoadnormal[3];
 
 extern gBitSAT<unsigned int> vid2loadid;
 
-__device__ float Heaviside(float s) {
+__device__ float Heaviside(float s, float beta) {
 #if 0
 	return s;
 #elif 1
-	float beta = 64;
+	float eta = 0.5;
+	return (tanhf(beta * eta) + tanhf(beta * (s - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
+#elif 0
 	float eta = 0.5;
 	return (tanhf(beta * eta) + tanhf(beta * (s - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
 #else 
@@ -89,11 +91,13 @@ __device__ float Heaviside(float s) {
 #endif
 }
 
-__device__ float Dirac(float s) {
+__device__ float Dirac(float s, float beta) {
 #if 0
 	return 1;
 #elif 1
-	float beta = 64;
+	float eta = 0.5;
+	return beta * (1 - tanhf(beta * (s - eta)) * tanhf(beta * (s - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
+#elif 0
 	float eta = 0.5;
 	return beta * (1 - tanhf(beta * (s - eta)) * tanhf(beta * (s - eta))) / (tanhf(beta * eta) + tanhf(beta * (1 - eta)));
 #else
@@ -3850,7 +3854,7 @@ void HierarchyGrid::lambdatest(void)
 	delete[] drr_data;
 }
 
-void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso)
+void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::vector<float>& bgnode_y, std::vector<float>& bgnode_z, std::vector<float>& spline_value, int mc_ereso, float beta)
 {
 	if (_layer != 0) return;
 
@@ -3861,10 +3865,15 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 	float* knotz_ = _gbuf.KnotSer[2];
 	float* rholist = _gbuf.rho_e;
 
-	int ereso = mc_ereso;
+	int ereso = mc_ereso + 2;
 	int vreso = ereso + 1;
-	float eh = (_box[1][0] - _box[0][0]) / mc_ereso;
-	float boxOrigin[3] = { _box[0][0], _box[0][1], _box[0][2] };
+
+	float ehx = (_mbox[1][0] - _mbox[0][0]) / mc_ereso;
+	float ehy = (_mbox[1][1] - _mbox[0][1]) / mc_ereso;
+	float ehz = (_mbox[1][2] - _mbox[0][2]) / mc_ereso;
+	float boxOrigin[3] = { _mbox[0][0], _mbox[0][1], _mbox[0][2]};
+	float boxEnd[3] = { _mbox[1][0], _mbox[1][1], _mbox[1][2]};
+	float boxOrispan[3] = { _mbox[0][0] - ehx, _mbox[0][1] - ehy, _mbox[0][2] - ehz};
 	float min_Density = _min_density;
 	float isosurface_value = _isosurface_value; // [MARK] may update to node_value
 	
@@ -3892,7 +3901,7 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 		int xCoordi = id % ereso;
 		int yCoordi = (id % (ereso * ereso)) / ereso;
 		int zCoordi = id / (ereso * ereso);
-		float pos[3] = { boxOrigin[0] + xCoordi * eh + 0.5 * eh,boxOrigin[1] + yCoordi * eh + 0.5 * eh, boxOrigin[2] + zCoordi * eh + 0.5 * eh };
+		float pos[3] = { boxOrispan[0] + xCoordi * ehx + 0.5 * ehx, boxOrispan[1] + yCoordi * ehy + 0.5 * ehy, boxOrispan[2] + zCoordi * ehz + 0.5 * ehz };
 
 		float val;
 		int i, j, k, ir, it, is, index;
@@ -3917,7 +3926,6 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 			SplineBasisZ(pos[2], pNZ);
 
 			val = 0.0f;
-			//index = i + j * m_im + k * m_im * m_in;
 			for (ir = i - gorder[0]; ir < i; ir++)
 			{
 				for (is = j - gorder[0]; is < j; is++)
@@ -3930,10 +3938,17 @@ void Grid::compute_background_mcPoints_value(std::vector<float>& bgnode_x, std::
 				}
 			}
 		}
+
+		if (pos[0] < boxOrigin[0] || pos[0] > boxEnd[0] || pos[1] < boxOrigin[1] || pos[1] > boxEnd[1] || pos[2] < boxOrigin[2] || pos[2] > boxEnd[2])
+		{
+			val = 0;
+		}
+
 		nodex[id] = pos[0];
 		nodey[id] = pos[1];
 		nodez[id] = pos[2];
-		node_value[id] = Heaviside(val - 0.5);
+		node_value[id] = val - 0.5;
+		//node_value[id] = Heaviside(val, beta) - 0.5;
 		//node_value[id] = cosf(2 * M_PI * t * pos[0]) + cosf(2 * M_PI * t * pos[1]) + cosf(2 * M_PI * t * pos[2]) + 0.1; // to verify the Marching cube
 	};
 
@@ -4776,21 +4791,14 @@ void Grid::setV2V_g(int vreso, BitSAT<unsigned int>& vrtsat, int* v2v[27])
 	cuda_error_check;
 }
 
-
-
 void Grid::init_rho(double rh0)
 {
-	// MARK: TO ADD
-	// initialization of rh0
 	init_array(_gbuf.rho_e, float(rh0), n_rho());
 }
 
 void Grid::init_coeff(double coeff)
 {
-	// MARK
-	// To add
 	int coeff_size = n_im * n_in * n_il;
-	//std::cout << " test : " << n_cijk() << std::endl;
 	std::cout << "coeff_size: " << coeff_size << "( " << n_im << ", " << n_in << ", " << n_il << " )" << std::endl;
 	init_array(_gbuf.coeffs, float(coeff), coeff_size);
 }
@@ -4803,6 +4811,16 @@ void Grid::init_volsens(double ratio)
 void Grid::init_volcsens(double ratio)
 {
 	init_array(_gbuf.volc_sens, float(ratio), n_cijk());
+}
+
+void Grid::init_sscsens(double sens)
+{
+	init_array(_gbuf.ssc_sens, float(sens), n_surf_points());
+}
+
+void Grid::init_dripcsens(double sens)
+{
+	init_array(_gbuf.dripc_sens, float(sens), n_surf_points());
 }
 
 //void TestSuit::setDensity(float* newrho)
@@ -5470,9 +5488,9 @@ void grid::Grid::compute_spline_surface_point_normal(void)
 #endif
 }
 
-void grid::Grid::correct_spline_surface_point_normal_direction(void)
+float grid::Grid::correct_spline_surface_point_normal_direction(float beta)
 {
-
+	float count = 1;
 	float* direction_tmp;
 	cudaMalloc(&direction_tmp, sizeof(float) * n_surf_points());
 	init_array(direction_tmp, float{ 0 }, n_surf_points());
@@ -5528,7 +5546,7 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 			}
 		}
 
-		s = Heaviside(val);
+		s = Heaviside(val, beta);
 		if (s < 0.5)   // s < 0.5 --> void
 		{
 			s = 1;
@@ -5567,13 +5585,14 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 	// MARK[TO CHECK] parallel_sum
 	cuda_error_check;
 	float* tmp = (float*)getTempBuf(sizeof(float) * n / 100);
-	float count = parallel_sum(_gbuf.surface_normal_direction, tmp, n);
+	count = parallel_sum(_gbuf.surface_normal_direction, tmp, n);
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
 	if (count < 0)
 	{
-		printf(" We need to correct the direction of the normal !\n ");
+		printf("\033[34m We need to correct the direction of the normal !\033[0m\n ");
+		//std::cout << "\033[34m-- [Same Coeff cannot extra surface points] --\033[0m" << std::endl;
 
 		float* normal_dirction = (float*)_gbuf.surface_normal_direction;
 		auto calc_normal = [=] __device__(int node_id) {
@@ -5587,7 +5606,7 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 				normal[i] = gpu_surface_normal[i][node_id];
 			}
 
-			for (int i = 0; i < 3; i++)	gpu_surface_normal[i][node_id] = direction_tmp * normal[i];
+			for (int i = 0; i < 3; i++)	gpu_surface_normal[i][node_id] = -normal[i];
 			return;
 		};
 		//size_t grid_dim, block_dim;
@@ -5611,6 +5630,7 @@ void grid::Grid::correct_spline_surface_point_normal_direction(void)
 		for (int i = 0; i < 3; i++)		delete spline_surf_node_normal[i];
 #endif     		
 	}
+	return count;
 }
 
 void grid::Grid::compute_selfsupp_flag_actual(void)
@@ -5828,6 +5848,41 @@ void grid::Grid::compute_spline_surface_point_normal_dcoeff(void)
 {
 }
 
+float grid::Grid::count_surface_points(void)
+{
+	auto calc_node = [=] __device__(int node_id) {
+		float p[3];
+		float s = 0.f;
+		for (int i = 0; i < 3; i++)		p[i] = gpu_SurfacePoints[i][node_id];
+		float normal_vector[3];
+		for (int i = 0; i < 3; i++)		normal_vector[i] = gpu_surface_normal[i][node_id];
+
+		if (normal_vector[2] < 0)
+		{
+			s = 1;
+		}
+		else
+		{
+			s = 0;
+		}
+		return s;
+	};
+
+	size_t grid_dim, block_dim;
+	int n = grid::Grid::spline_surface_node->size();
+	make_kernel_param(&grid_dim, &block_dim, n, 256);
+	traverse << <grid_dim, block_dim >> > ((float*)_gbuf.surface_point_buf, n, calc_node);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n / 100);
+	float count = parallel_sum(_gbuf.surface_point_buf, sum, n);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+	return count;
+}
+
+//  Deal with self-supporting 
 void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 {
 	if (_layer != 0) return;
@@ -5995,47 +6050,13 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 	cuda_error_check;
 
 #ifdef ENABLE_MATLAB
-	gpu_manager_t::pass_buf_to_matlab("ss_sens2", dc_host, n_cijk());
+	gpu_manager_t::pass_buf_to_matlab("ssc_sens2", dc_host, n_cijk());
 #endif
 
 	cudaFree(dc_tmp);
 	dc_tmp = nullptr;
 	delete[] dc_host;
 	dc_host = nullptr;
-}
-
-float grid::Grid::count_surface_points(void)
-{
-	auto calc_node = [=] __device__(int node_id) {
-		float p[3];
-		float s = 0.f;
-		for (int i = 0; i < 3; i++)		p[i] = gpu_SurfacePoints[i][node_id];
-		float normal_vector[3];
-		for (int i = 0; i < 3; i++)		normal_vector[i] = gpu_surface_normal[i][node_id];
-
-		if (normal_vector[2] < 0)
-		{
-			s = 1;
-		}
-		else
-		{
-			s = 0;
-		}
-		return s;
-	};
-
-	size_t grid_dim, block_dim;
-	int n = grid::Grid::spline_surface_node->size();
-	make_kernel_param(&grid_dim, &block_dim, n, 256);
-	traverse << <grid_dim, block_dim >> > ((float*)_gbuf.surface_point_buf, n, calc_node);
-	cudaDeviceSynchronize();
-	cuda_error_check;
-
-	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n / 100);
-	float count = parallel_sum(_gbuf.surface_point_buf, sum, n);
-	cudaDeviceSynchronize();
-	cuda_error_check;
-	return count;
 }
 
 void grid::Grid::compute_spline_selfsupp_constraint(void)
@@ -6118,7 +6139,7 @@ void grid::Grid::compute_spline_selfsupp_constraint(void)
 #ifdef ENABLE_MATLAB
 	float* host_spline_constrain = new float[n];
 	cudaMemcpy(host_spline_constrain, _gbuf.ss_value, sizeof(float)* n, cudaMemcpyDeviceToHost);
-	gpu_manager_t::pass_buf_to_matlab("spline_constrain", host_spline_constrain, n);
+	gpu_manager_t::pass_buf_to_matlab("ss_constraint", host_spline_constrain, n);
 	delete host_spline_constrain;
 	cuda_error_check;
 #endif
@@ -6128,15 +6149,23 @@ float grid::Grid::global_selfsupp_constraint(void)
 {
 	float val = 0.f;
 
-	float count = count_surface_points();
+	int modeid = _ssmode;
+	float func_para = sigmoid_c;
+	float count = grid::Grid::spline_surface_node->size();
+
+	if (modeid % 2 == 0)
+	{
+		count = count_surface_points();
+	}
 
 	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n_surf_points() / 100);
 	float ss_sum = parallel_sum(_gbuf.ss_value, sum, n_surf_points());
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
-	int modeid = _ssmode;
-	float func_para = sigmoid_c;
+	std::cout << "--[TEST] total  of SS constraints : " << ss_sum << std::endl;
+	std::cout << "--[TEST] number of SS constraints : " << count << std::endl;
+
 	if (modeid == 0 || modeid == 1)
 	{
 		func_para = p_norm;
@@ -6151,6 +6180,142 @@ float grid::Grid::global_selfsupp_constraint(void)
 	{
 		func_para = sigmoid_c;
 		val = ss_sum / count;
+	}
+	return val;
+}
+
+//  Deal with Dripping
+void grid::Grid::compute_spline_drip_constraint_dcoeff(void)
+{
+
+}
+
+void grid::Grid::compute_spline_drip_constraint(void)
+{
+	init_array(_gbuf.drip_value, float{ 1.0 }, n_surf_points());
+
+	float print_angle = _opt_print_angle;
+	int modeid = _ssmode;
+	float func_para = sigmoid_c;
+	if (modeid == 0 || modeid == 1)
+	{
+		func_para = p_norm;
+	}
+	else if (modeid == 2 || modeid == 3)
+	{
+		func_para = hfunction_c;
+	}
+	else if (modeid == 4 || modeid == 5)
+	{
+		func_para = sigmoid_c;
+	}
+
+	auto calc_node = [=] __device__(int node_id) {
+		float p[3];
+		for (int i = 0; i < 3; i++)
+		{
+			p[i] = gpu_SurfacePoints[i][node_id];
+		}
+
+		float normal_vector[3];
+		for (int i = 0; i < 3; i++)
+		{
+			normal_vector[i] = gpu_surface_normal[i][node_id];
+		}
+
+		float val = 0.f, inner = 0.f;
+		inner = normal_vector[2] / norm(normal_vector) / cosf(print_angle);
+		// [MARK] TOADD more enum
+		if (modeid == 0)            // p_norm_ss
+		{
+			if (normal_vector[2] < 0)
+			{
+				val = pow(inner, func_para);
+			}
+		}
+		else if (modeid == 1)
+		{
+			val = pow(inner, func_para);
+		}
+		else if (modeid == 2)       // h_function_ss
+		{
+			if (normal_vector[2] < 0)
+			{
+				//val = h(inner, func_para);
+				val = 1.0;
+			}
+		}
+		else if (modeid == 3)       // h_function2_ss
+		{
+			//val = h(inner, func_para);
+			val = 1.0;
+		}
+		else if (modeid == 4)       // overhang_ss
+		{
+			if (normal_vector[2] < 0)
+			{
+				//val = oh(inner, func_para);
+				val = 1.0;
+			}
+		}
+		else if (modeid == 5)       // overhang2_ss
+		{
+			//val = oh(inner, func_para);
+			val = 1.0;
+		}
+		return val;
+	};
+
+	size_t grid_dim, block_dim;
+	int n = n_surf_points();
+	make_kernel_param(&grid_dim, &block_dim, n, 256);
+	traverse << <grid_dim, block_dim >> > ((float*)_gbuf.drip_value, n, calc_node);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+#ifdef ENABLE_MATLAB
+	float* host_spline_constrain = new float[n];
+	cudaMemcpy(host_spline_constrain, _gbuf.drip_value, sizeof(float) * n, cudaMemcpyDeviceToHost);
+	gpu_manager_t::pass_buf_to_matlab("drip_constraint", host_spline_constrain, n);
+	delete host_spline_constrain;
+	cuda_error_check;
+#endif
+}
+
+float grid::Grid::global_drip_constraint(void)
+{
+	float val = 0.f;
+
+	int modeid = _ssmode;
+	float func_para = sigmoid_c;
+	float count = grid::Grid::spline_surface_node->size();
+
+	if (modeid % 2 == 0)
+	{
+		count = count_surface_points();
+	}
+
+	std::cout << "--[TEST] number of DRIP constraints : " << count << std::endl;
+
+	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n_surf_points() / 100);
+	float drip_sum = parallel_sum(_gbuf.drip_value, sum, n_surf_points());
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	if (modeid == 0 || modeid == 1)
+	{
+		func_para = p_norm;
+		val = pow(drip_sum / count, 1 / func_para) - 1;
+	}
+	else if (modeid == 2 || modeid == 3)
+	{
+		func_para = hfunction_c;
+		val = drip_sum / count;
+	}
+	else if (modeid == 4 || modeid == 5)
+	{
+		func_para = sigmoid_c;
+		val = drip_sum / count;
 	}
 	return val;
 }
