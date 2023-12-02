@@ -2423,6 +2423,12 @@ size_t grid::Grid::build(
 			gbuf_size += sizeof(float) * _num_surface_points;
 			gbuf_size += sizeof(float) * _num_surface_points;
 		} 
+
+		for (int i = 0; i < 9; i++)
+		{
+			_gbuf.surface_hessian[i] = (float*)gm.add_buf(_name + " SurfaceHessian " + std::to_string(i), sizeof(float) * _num_surface_points);
+			gbuf_size += sizeof(float) * _num_surface_points;
+		}
 		_gbuf.surface_normal_norm_dc = (float*)gm.add_buf(_name + " SurfaceNormalnormdc ", sizeof(float) * _num_surface_points);
 		gbuf_size += sizeof(float) * _num_surface_points;
 		
@@ -3548,4 +3554,6 @@ void grid::Grid::scale_spline_drip_constraint_dcoeff(void)
 	//std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
 	scaleVector(getDripCSens(), spline_surface_node->size(), 1 / count);
 	SScsens2matlab("dripc_sens3");
+
+	scaleVector(getDripCSens(), spline_surface_node->size(), 0.0);
 }

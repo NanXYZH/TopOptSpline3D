@@ -36,6 +36,7 @@ extern  __constant__ float* gpu_KnotSer[3];
 extern  __constant__ float* gpu_cijk;
 extern  __constant__ float* gpu_SurfacePoints[3];
 extern  __constant__ float* gpu_surface_normal[3];
+extern  __constant__ float* gpu_surface_hessian[9];
 extern  __constant__ float* gpu_surface_normal_direction[1];
 
 extern  __constant__ float* gpu_surface_normal_dc[3];         // derivative to coeffs

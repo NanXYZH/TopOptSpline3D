@@ -174,7 +174,9 @@ namespace grid {
 		h_function_drip, // only nz < 0
 		h_function2_drip,// all
 		overhang_drip,   // only nz < 0
-		overhang2_drip   // all
+		overhang2_drip,  // all
+		exp_drip,
+		exp2_drip
 	};
 
 	template<typename dt = double, int N = 3>
@@ -261,6 +263,7 @@ namespace grid {
 			float* coeffs;
 			float* surface_points[3];
 			float* surface_normal[3];
+			float* surface_hessian[9];
 			float* surface_normal_direction;
 			float* surface_normal_dc[3];            // derivative to coeffs
 			float* surface_normal_norm_dc;      
@@ -339,6 +342,8 @@ namespace grid {
 		float hfunction_c = 10;    // the parameter of h function which change the local constraint to global
 
 		float tanh_g = 0.5;        // the parameter of tanh which change the local constraint to global
+
+		float drip_beta = 16;
 
 		float _min_coeff = 0.f;
 		float _max_coeff = 1.0f;

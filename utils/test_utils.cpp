@@ -1004,7 +1004,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 	// project density
 #ifdef ENABLE_HEAVISIDE
-	float para_beta = 8;
+	float para_beta = 4;
 	float change_tol = 1e-3;
 	float change[2] = { 0.f };
 	//grids[0]->rho2matlab("rhopj0");
@@ -1021,6 +1021,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	snippet::converge_criteria stop_check(1, 5, 1e-3);
 
 	std::vector<double> cRecord, volRecord, ssRecord, dripRecord;
+	double* con_value;
 
 	double Vc = Vgoal - params.volume_ratio;
 
@@ -1031,11 +1032,15 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 #ifdef ENABLE_SELFSUPPORT
 	n_constraint = 3;
 #endif
+	con_value = new double[n_constraint];
+
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
+	float sensScale = 1e4;
 	float volScale = 1e3;
-	float sensScale = 1e5;
+	float SSScale = 1e1;
+	float dripScale = 1e0;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -1047,7 +1052,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		gdiff[i] = gdiffval[i].data();
 	}
 
-	while (itn++ < 50) {
+	while (itn++ < 100) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
 		Vgoal *= (1 - params.volume_decrease);
 		Vc = Vgoal - params.volume_ratio;
@@ -1068,6 +1073,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		// compute volume 
 		double vol = grids[0]->volumeRatio();
 		v[0] = volScale * (vol - params.volume_ratio);
+		con_value[0] = vol;
 
 		double ss_value = 0.0;
 		double drip_value = 0.0;
@@ -1105,19 +1111,28 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		}
 		else
 		{
+			if (itn > 50)
+			{
+				SSScale = 1e3;
+			}
 			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;
 			deal_surface_points(para_beta);
 			ss_value = grids[0]->global_selfsupp_constraint();
 			std::cout << "--[TEST] SS value : " << ss_value << std::endl;
 			drip_value = grids[0]->global_drip_constraint();
+			drip_value = 1.0;
 			std::cout << "--[TEST] DRIP value : " << drip_value << std::endl;
 		}
+
+		con_value[1] = ss_value;
+		con_value[2] = drip_value;
 #endif
 
 		printf("-- c = %6.4e  v = %4.3lf  r = %4.2lf%%\n", c, vol, rel_res * 100);
 		if (isnan(c) || abs(c) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
 		cRecord.emplace_back(c); volRecord.emplace_back(vol); ssRecord.emplace_back(ss_value); dripRecord.emplace_back(drip_value);
-		if (stop_check.update(c, &vol) && Vgoal <= params.volume_ratio) break;
+		//if (stop_check.update(c, &vol) && Vgoal <= params.volume_ratio) break;
+		if (stop_check.update(c, con_value) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
 
 		// compute sensitivity
@@ -1129,6 +1144,8 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 		scaleVector(grids[0]->getCSens(), grids[0]->n_cijk(), sensScale);
 		scaleVector(grids[0]->getVolCSens(), grids[0]->n_cijk(), volScale);
+		scaleVector(grids[0]->getSSCSens(), grids[0]->n_cijk(), SSScale);
+		scaleVector(grids[0]->getDripCSens(), grids[0]->n_cijk(), dripScale);
 
 		//// just for testing the form of getVolSens input is OK
 		//initVolCSens(1);
@@ -1146,12 +1163,13 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 #ifdef ENABLE_SELFSUPPORT
 		gdiff[1] = grids[0]->getSSCSens();
-		gval[1] = ss_value - 1;
+		gval[1] = SSScale * (ss_value - 1);
 		std::cout << "-- TEST gv[1] : " << gval[1] << std::endl;
 		gdiff[2] = grids[0]->getDripCSens();
-		gval[2] = drip_value - 1;
+		gval[2] = dripScale * (drip_value - 1);
 		std::cout << "-- TEST gv[2] : " << gval[2] << std::endl;
 #endif
+		std::cout << "-- TEST Heaviside beta : " << para_beta << std::endl;
 
 		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
 

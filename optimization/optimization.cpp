@@ -161,6 +161,12 @@ void setDripMode(const std::string& modestr)
 	else if (modestr == "oh2") {
 		grids.setDripMode(grid::GlobalDripMode::overhang2_drip);
 	}
+	else if (modestr == "exp") {
+		grids.setDripMode(grid::GlobalDripMode::exp_drip);
+	}
+	else if (modestr == "exp2") {
+		grids.setDripMode(grid::GlobalDripMode::exp2_drip);
+	}
 	else {
 		printf("-- unsupported mode\n");
 		exit(-1);
