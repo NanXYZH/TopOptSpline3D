@@ -987,6 +987,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 #if 1
 	// MARK: ADD user-defined input	
+	//std::cout << "--TEST volume ratio: " << params.volume_ratio  << "..."<< std::endl;
 	initCoeffs(params.volume_ratio);
 	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
@@ -1037,7 +1038,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float sensScale = 1e4;
+	float sensScale = 1e0;
 	float volScale = 1e3;
 	float SSScale = 1e1;
 	float dripScale = 1e0;
@@ -1052,7 +1053,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		gdiff[i] = gdiffval[i].data();
 	}
 
-	while (itn++ < 100) {
+	while (itn++ < 200) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
 		Vgoal *= (1 - params.volume_decrease);
 		Vc = Vgoal - params.volume_ratio;
@@ -1111,7 +1112,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		}
 		else
 		{
-			if (itn > 50)
+			if (itn > 25)
 			{
 				SSScale = 1e3;
 			}
