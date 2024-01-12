@@ -167,11 +167,12 @@ __device__ float doh(float x, float para_func) {
 #endif
 }
 
-__device__ float dr(float x, float para_func) {
+// extra x < 0
+__device__ float appro_max1(float x, float para_func) {
 	return -x / (1 + expf(para_func * x));
 }
 
-__device__ float ddr(float x, float para_func) {
+__device__ float dappro_max1(float x, float para_func) {
 	return (-1 + x * para_func) / (1 + expf(para_func * x)) - x * para_func / (1 + expf(para_func * x)) / (1 + expf(para_func * x));
 }
 
@@ -6350,14 +6351,14 @@ void grid::Grid::compute_spline_drip_constraint_dcoeff(void)
 						{
 							if (normal_vector[2] < 0)
 							{
-								val = ddr(inner, func_para) * dinner;
+								val = dappro_max1(inner, func_para) * dinner;
 							}
 						}
 						else if (modeid == 7)       // overhang2_ss
 						{
-							val = ddr(inner, func_para) * dinner;
+							val = dappro_max1(inner, func_para) * dinner;
 						}
-						dc_tmp[index] += val;
+						dc_tmp[index] += 0;
 					}
 				}
 			}
@@ -6463,11 +6464,11 @@ void grid::Grid::compute_spline_drip_constraint(void)
 
 			SplineBasisDeriY(p[1], 1, NY);
 			SplineBasisDeriY(p[1], 2, pNY);
-			SplineBasisDeriY(p[0], 3, pPNY); // 3 means the second order derivative value
+			SplineBasisDeriY(p[1], 3, pPNY); // 3 means the second order derivative value
 
 			SplineBasisDeriZ(p[2], 1, NZ);
 			SplineBasisDeriZ(p[2], 2, pNZ);
-			SplineBasisDeriZ(p[0], 3, pPNZ); // 3 means the second order derivative value
+			SplineBasisDeriZ(p[2], 3, pPNZ); // 3 means the second order derivative value
 
 			for (ir = i - m_iM; ir < i; ir++)
 			{
@@ -6502,6 +6503,11 @@ void grid::Grid::compute_spline_drip_constraint(void)
 		}
 
 		float val = 0.f, inner = 0.f;
+		float inner1 = 0.f, inner2 = 0.f;
+		float h1 = 0.f, h2 = 0.f;
+		inner1 = Hessian[0][0];
+		inner2 = Hessian[0][0] * Hessian[1][1] - Hessian[0][1] * Hessian[1][0];
+
 		inner = print_direction[0] * print_direction[0] * (Hessian[0][0] + Hessian[1][0] + Hessian[2][0]) + 
 			print_direction[1] * print_direction[1] * (Hessian[0][1] + Hessian[1][1] + Hessian[2][1]) +
 			print_direction[2] * print_direction[2] * (Hessian[0][2] + Hessian[1][2] + Hessian[2][2]);
@@ -6544,12 +6550,12 @@ void grid::Grid::compute_spline_drip_constraint(void)
 		{
 			if (normal_vector[2] < 0)
 			{
-				val = dr(inner, func_para);
+				val = appro_max1(inner, func_para);
 			}
 		}
 		else if (modeid == 7)       // exp2_drip
 		{
-			val = dr(inner, func_para);
+			val = appro_max1(inner, func_para);
 		}
 		return val;
 	};

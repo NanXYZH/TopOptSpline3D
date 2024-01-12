@@ -1,0 +1,34 @@
+{
+    "model":"cube24x12x12.obj",
+    "fixedarea":[
+{
+            "type": "sphere",
+            "radius": 0.5,
+            "center": [24.0, 0.0, 0.0]
+        },
+{
+            "type": "sphere",
+            "radius": 0.5,
+            "center": [24.0, 12.0, 0.0]
+        }
+    ],
+    "force":[
+{
+            "type":"const",
+            "norm":1,
+            "direction":[0,0,-1],
+            "region":{
+                "type": "sphere",
+            "radius": 0.5,
+            "center": [0.0, 6.0, 12.0]
+            }
+        }
+ ],
+    "loadarea":[ 
+{
+            "type": "sphere",
+            "radius": 0.5,
+            "center": [0.0, 6.0, 12.0]
+        }
+    ]
+}
