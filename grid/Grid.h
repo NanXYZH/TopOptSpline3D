@@ -345,6 +345,8 @@ namespace grid {
 
 		float drip_beta = 16;
 
+		float drip_mu = 64;
+
 		float _min_coeff = 0.f;
 		float _max_coeff = 1.0f;
 		float _isosurface_value = (_min_coeff + _max_coeff) / 2;
@@ -709,6 +711,8 @@ namespace grid {
 
 		void initrho2matlab(const std::string& nam);
 		void rho2matlab(const std::string& nam);
+
+		void coeff2matlab(const std::string& nam);
 
 		void sens2matlab(const std::string& nam);
 		void csens2matlab(const std::string& nam);

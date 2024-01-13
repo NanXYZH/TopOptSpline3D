@@ -988,7 +988,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 #if 1
 	// MARK: ADD user-defined input	
 	//std::cout << "--TEST volume ratio: " << params.volume_ratio  << "..."<< std::endl;
-	initCoeffs(params.volume_ratio);
+	initCoeffs(0.5);
 	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
 	grids[0]->set_spline_knot_infoSymbol();
@@ -1059,12 +1059,13 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		Vc = Vgoal - params.volume_ratio;
 		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
 
+		grids[0]->coeff2matlab("coeff_2");
 		// set spline_coeff from mma (cpu2gpu)
 		setCoeff(mma.get_x().data());
-
 		// update coeff 2 density
+		grids[0]->coeff2matlab("coeff_1");
 		grids[0]->coeff2density();
-
+		
 #ifdef ENABLE_HEAVISIDE
 		projectDensities(para_beta);
 		grids[0]->initrho2matlab("rhoinit");
@@ -1120,9 +1121,9 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 			deal_surface_points(para_beta);
 			ss_value = grids[0]->global_selfsupp_constraint();
 			std::cout << "--[TEST] SS value : " << ss_value << std::endl;
-			drip_value = grids[0]->global_drip_constraint();
-			drip_value = 1.0;
+			drip_value = grids[0]->global_drip_constraint();			
 			std::cout << "--[TEST] DRIP value : " << drip_value << std::endl;
+			drip_value = 1.0;
 		}
 
 		con_value[1] = ss_value;

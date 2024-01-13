@@ -2899,6 +2899,11 @@ void Grid::rho2matlab(const std::string& nam)
 	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.rho_e, n_rho());
 }
 
+void Grid::coeff2matlab(const std::string& nam)
+{
+	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.coeffs, n_cijk());
+}
+
 void Grid::sens2matlab(const std::string& nam)
 {
 	gpu_manager_t::pass_dev_buf_to_matlab(nam.c_str(), _gbuf.g_sens, n_rho());
@@ -3355,7 +3360,16 @@ void Grid::generate_spline_surface_nodes(float beta)
 	std::vector<float> bgnodex;
 	std::vector<float> bgnodey;
 	std::vector<float> bgnodez;
-	int cur_ereso = _ereso / 2;
+	int cur_ereso;
+	if (_ereso > 120)
+	{
+		cur_ereso = _ereso / 2;
+	}
+	else
+	{
+		cur_ereso = _ereso;
+	}
+	std::cout << "Element Resolution for marching cube ----- " << cur_ereso << std::endl;
 	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val, cur_ereso, beta);
 
 	std::vector<float> bgnode[3];
@@ -3551,9 +3565,10 @@ void grid::Grid::scale_spline_drip_constraint_dcoeff(void)
 	{
 		count = count_surface_points();
 	}
-	//std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
+	std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
 	scaleVector(getDripCSens(), spline_surface_node->size(), 1 / count);
 	SScsens2matlab("dripc_sens3");
 
 	scaleVector(getDripCSens(), spline_surface_node->size(), 0.0);
+	SScsens2matlab("dripc_sens4");
 }

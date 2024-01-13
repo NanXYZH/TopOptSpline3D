@@ -866,7 +866,8 @@ void deal_surface_points(float beta) {
 	grids[0]->scale_spline_selfsupp_constraint_dcoeff();
 
 	grids[0]->compute_spline_drip_constraint();
-	grids[0]->compute_spline_drip_constraint_dcoeff();
+	initDripCSens(float{ 0.0 });
+	//grids[0]->compute_spline_drip_constraint_dcoeff();
 	// * 1 / num_constraint
 	grids[0]->scale_spline_drip_constraint_dcoeff();
 }
