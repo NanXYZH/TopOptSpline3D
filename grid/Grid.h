@@ -343,9 +343,11 @@ namespace grid {
 
 		float tanh_g = 0.5;        // the parameter of tanh which change the local constraint to global
 
-		float drip_beta = 16;
+		float drip_beta = 128;
 
-		float drip_mu = 64;
+		float drip_mu = 32;
+
+		float drip_angle = 135.0 / 180.0 * M_PI;
 
 		float _min_coeff = 0.f;
 		float _max_coeff = 1.0f;
@@ -654,6 +656,7 @@ namespace grid {
 
 		void compute_spline_selfsupp_constraint(void);
 		void compute_spline_drip_constraint(void);
+		void compute_spline_drip_constraint_test(void);
 		float global_selfsupp_constraint(void);
 		float global_drip_constraint(void);
 		void compute_spline_selfsupp_constraint_dcoeff(void);

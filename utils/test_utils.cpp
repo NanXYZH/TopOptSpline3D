@@ -1041,7 +1041,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	float sensScale = 1e0;
 	float volScale = 1e3;
 	float SSScale = 1e1;
-	float dripScale = 1e0;
+	float dripScale = 1e3;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -1101,21 +1101,27 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 			initSSCSens(float{ 0.0 });
 			initDripCSens(float{ 0.0 });
 			ss_value = 1.0;
-			drip_value = 1.0;
+			drip_value = 0.0;
 		}
-		else if(itn < 15)
+		else if(itn < 20)
 		{
 			std::cout << "\033[34m-- [Optimization of Coeffs without self-supporting] --\033[0m" << std::endl;
 			initSSCSens(float{ 0.0 });
 			initDripCSens(float{ 0.0 });
 			ss_value = 1.0;
-			drip_value = 1.0;
+			drip_value = 0.0;
 		}
 		else
 		{
-			if (itn > 25)
+			if (itn > 30)
 			{
 				SSScale = 1e3;
+				dripScale = 1e5;
+			}
+			else if (itn > 50)
+			{
+				dripScale = 1e8;
+
 			}
 			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;
 			deal_surface_points(para_beta);
@@ -1123,7 +1129,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 			std::cout << "--[TEST] SS value : " << ss_value << std::endl;
 			drip_value = grids[0]->global_drip_constraint();			
 			std::cout << "--[TEST] DRIP value : " << drip_value << std::endl;
-			drip_value = 1.0;
+			//drip_value = 1.0;
 		}
 
 		con_value[1] = ss_value;
@@ -1168,7 +1174,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		gval[1] = SSScale * (ss_value - 1);
 		std::cout << "-- TEST gv[1] : " << gval[1] << std::endl;
 		gdiff[2] = grids[0]->getDripCSens();
-		gval[2] = dripScale * (drip_value - 1);
+		gval[2] = dripScale * (drip_value);
 		std::cout << "-- TEST gv[2] : " << gval[2] << std::endl;
 #endif
 		std::cout << "-- TEST Heaviside beta : " << para_beta << std::endl;

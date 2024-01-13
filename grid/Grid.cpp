@@ -3361,7 +3361,7 @@ void Grid::generate_spline_surface_nodes(float beta)
 	std::vector<float> bgnodey;
 	std::vector<float> bgnodez;
 	int cur_ereso;
-	if (_ereso > 120)
+	if (_ereso > 250)
 	{
 		cur_ereso = _ereso / 2;
 	}
@@ -3568,7 +3568,4 @@ void grid::Grid::scale_spline_drip_constraint_dcoeff(void)
 	std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
 	scaleVector(getDripCSens(), spline_surface_node->size(), 1 / count);
 	SScsens2matlab("dripc_sens3");
-
-	scaleVector(getDripCSens(), spline_surface_node->size(), 0.0);
-	SScsens2matlab("dripc_sens4");
 }

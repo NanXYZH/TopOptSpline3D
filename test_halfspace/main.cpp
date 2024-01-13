@@ -47,6 +47,12 @@ void Cal_Normal_3D(const Vec3d& v1, const Vec3d& v2, const Vec3d& v3, Vec3d& vn)
 int main()
 {
 
+	float angle_epsilon = 170 / 180;
+	float test1 = 10., test2 = 20.;
+
+	std::cout << angle_epsilon << std::endl;
+	std::cout << test1 / test2 << std::endl;
+
 	int x = 10;
 	int y = 20;
 
