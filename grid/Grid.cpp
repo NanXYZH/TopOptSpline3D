@@ -3356,6 +3356,7 @@ void Grid::compute_surface_nodes_in_model(std::vector<float>& surface_node_x, st
 
 void Grid::generate_spline_surface_nodes(float beta)
 {
+	// To correct
 	std::vector<float> mcPoints_val;
 	std::vector<float> bgnodex;
 	std::vector<float> bgnodey;
