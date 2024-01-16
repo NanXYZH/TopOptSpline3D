@@ -1,7 +1,17 @@
 ﻿  main.cpp
+G:\eigen3\Eigen\src\Core\arch\Default\Half.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
+D:\robtop-main\test_halfspace\main.cpp(61,26): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(62,29): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(82,26): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(83,29): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(104,29): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(124,28): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(125,31): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(128,28): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\robtop-main\test_halfspace\main.cpp(129,31): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
   正在生成代码
-  0 of 21 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+  1 of 254 functions ( 0.4%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    0 functions had inline decision re-evaluated but remain unchanged
+    1 functions had inline decision re-evaluated but remain unchanged
   已完成代码的生成
   test_halfspace.vcxproj -> D:\robtop-main\build\x64\Release\test_halfspace.exe

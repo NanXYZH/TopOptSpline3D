@@ -19,6 +19,19 @@
 
 #include "MeshDefinition.h"
 
+// 定义 ANSI escape codes
+#define RESET   "\033[0m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
+
+//// 输出带颜色的文本
+//printf("%sRed Text%s\n", RED, RESET);
+//printf("%sGreen Text%s\n", GREEN, RESET);
+//printf("%sYellow Text%s\n", YELLOW, RESET);
+//printf("%sBlue Text%s\n", BLUE, RESET);
+
 constexpr static int m_iM = 3;                                       // The order of implicit spline
 
 namespace grid {
@@ -411,7 +424,7 @@ namespace grid {
 		std::function<Eigen::Matrix<double, 3, 1>(double[3])> _loadField;
 
 		float _mbox[2][3];
-		int _num_surface_points = 1e5;
+		int _num_surface_points = 2e5;
 
 		std::vector<int> _gsLoadNodes;
 
@@ -824,6 +837,8 @@ namespace grid {
 
 		int _logFlag = 0;
 
+		int boundingind[2][3] = { std::numeric_limits<int>::max(), std::numeric_limits<int>::max(), std::numeric_limits<int>::max(), std::numeric_limits<int>::lowest(), std::numeric_limits<int>::lowest(), std::numeric_limits<int>::lowest() };
+		
 	public:
 		typedef OpenMesh::VectorT<float, 3> Vec3x;
 		typedef float Scaler;
@@ -949,6 +964,11 @@ namespace grid {
 		void writeDensity(const std::string& filename);
 
 		void writeDensityac(const std::string& filename);
+		void writeDensityac_symmetry(const std::string& filename, int type_);
+
+		void findVdbBoundingbox(std::vector<int> pos[3]);
+		std::vector<int> SymmetryPoint(int px, int py, int pz, int plane);
+		std::vector<std::vector<int>> SymmetryMatrix(const std::vector<int> matrix[3], std::vector<std::vector<int>> bdbox, int plane);
 
 		void readDensity(const std::string& filename);
 

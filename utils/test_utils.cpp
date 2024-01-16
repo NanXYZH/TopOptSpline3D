@@ -1017,6 +1017,7 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 
 	// end
 	grids.writeDensityac(grids.getPath("density_test.vdb"));
+	
 	int itn = 0;
 
 	snippet::converge_criteria stop_check(1, 5, 1e-3);

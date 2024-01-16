@@ -1,6 +1,15 @@
 #include<iostream>
+#include <vector>
+#include <Eigen/Dense>
 
 using namespace std;
+
+// 定义 ANSI escape codes
+#define RESET   "\033[0m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
 
 //三维double矢量
 struct Vec3d
@@ -44,8 +53,290 @@ void Cal_Normal_3D(const Vec3d& v1, const Vec3d& v2, const Vec3d& v3, Vec3d& vn)
 	vn.Set(na, nb, nc);
 }
 
+// 函数用于生成按列翻转的矩阵
+std::vector<std::vector<int>> flipMatrix(const std::vector<std::vector<int>>& matrix) {
+	std::vector<std::vector<int>> flippedMatrix;
+
+	// 获取矩阵的行列数
+	int rows = matrix.size();
+	int cols = matrix[0].size();
+
+	// 初始化翻转后的矩阵
+	flippedMatrix.resize(cols, std::vector<int>(rows, 0));
+
+	// 执行列翻转操作
+	for (int i = 0; i < rows; ++i) {
+		for (int j = 0; j < cols; ++j) {
+			flippedMatrix[j][i] = matrix[i][j];
+		}
+	}
+
+	return flippedMatrix;
+}
+
+// 函数用于生成按列对称的矩阵
+std::vector<std::vector<int>> ReverseMatrix(const std::vector<std::vector<int>>& matrix) {
+	std::vector<std::vector<int>> ReversedMatrix;
+
+	// 获取矩阵的行列数
+	int rows = matrix.size();
+	int cols = matrix[0].size();
+
+	// 初始化左右颠倒的矩阵
+	ReversedMatrix.resize(rows, std::vector<int>(cols, 0));
+
+	// 执行列翻转操作
+	for (int i = 0; i < rows; ++i) {
+		for (int j = 0; j < cols; ++j) {
+			ReversedMatrix[i][j] = matrix[i][cols - j - 1];
+		}
+	}
+
+	return ReversedMatrix;
+}
+
+// 函数用于生成按列对称的矩阵
+std::vector<std::vector<int>> SymmetryMatrix2(const std::vector<int> matrix[3]) {
+	std::vector<std::vector<int>> SymmetricMatrix;
+
+	// 获取矩阵的行列数
+	int rows = 3;
+	int cols = matrix[0].size();
+
+	// 初始化左右颠倒的矩阵
+	SymmetricMatrix.resize(rows, std::vector<int>(cols, 0));
+
+	// 执行列翻转操作
+	for (int i = 0; i < rows; ++i) {
+		for (int j = 0; j < cols; ++j) {
+			SymmetricMatrix[i][j] = matrix[i][cols - j - 1];
+		}
+	}
+
+	return SymmetricMatrix;
+}
+
+// 函数用于拼接两个矩阵
+std::vector<std::vector<int>> concatenateMatrices(const std::vector<std::vector<int>>& matrix1, const std::vector<std::vector<int>>& matrix2) {
+	std::vector<std::vector<int>> concatenatedMatrix;
+
+	// 获取矩阵1的行列数
+	int rows1 = matrix1.size();
+	int cols1 = matrix1[0].size();
+
+	// 获取矩阵2的行列数
+	int rows2 = matrix2.size();
+	int cols2 = matrix2[0].size();
+
+	// 检查矩阵是否具有相同的行数
+	if (rows1 != rows2) {
+		std::cerr << "Error: Matrices have different number of rows." << std::endl;
+		return concatenatedMatrix;
+	}
+
+	// 初始化拼接后的矩阵
+	concatenatedMatrix.resize(rows1, std::vector<int>(cols1 + cols2, 0));
+
+	// 复制矩阵1的内容
+	for (int i = 0; i < rows1; ++i) {
+		for (int j = 0; j < cols1; ++j) {
+			concatenatedMatrix[i][j] = matrix1[i][j];
+		}
+	}
+
+	// 复制矩阵2的内容
+	for (int i = 0; i < rows2; ++i) {
+		for (int j = 0; j < cols2; ++j) {
+			concatenatedMatrix[i][j + cols1] = matrix2[i][j];
+		}
+	}
+
+	return concatenatedMatrix;
+}
+
+std::vector<std::vector<int>> SymmetryMatrix3(const std::vector<int> matrix[3], std::vector<std::vector<int>> bdbox, int plane)
+{
+	std::vector<std::vector<int>> SyMatrx;
+	// x(yoz plane) 01 
+	// y(xoz plane) 23 
+	// z(xoy plane) 45 
+	// 0 2 4 left
+	// 1 3 5 right
+
+	SyMatrx.resize(3);
+	for (int i = 0; i < 3; i++)
+	{
+		SyMatrx[i].resize(matrix[0].size());
+	}
+
+	for (int i = 0; i  < matrix[0].size(); ++i)
+	{
+		int tmp[3];		
+		
+		for (int j = 0; j < 3; j ++)
+		{
+			tmp[j] = matrix[j][i];
+			if (plane % 2 == 0)
+			{
+				tmp[j] = tmp[j] - bdbox[0][j];
+			}
+			else
+			{
+				tmp[j] = tmp[j] - bdbox[1][j];
+			}			
+		}
+
+		if (plane == 0 || plane == 1)
+		{
+			tmp[0] = -tmp[0];
+		}
+		else if (plane == 2 || plane == 3)
+		{
+			tmp[1] = -tmp[1];
+		}
+		else if (plane == 4 || plane == 5)
+		{
+			tmp[2] = -tmp[2];
+		}
+
+		for (int j = 0; j < 3; j++)
+		{
+			if (plane % 2 == 0)
+			{
+				tmp[j] = tmp[j] + bdbox[0][j];
+			}
+			else
+			{
+				tmp[j] = tmp[j] + bdbox[1][j];
+			}
+
+			SyMatrx[j][i] = tmp[j];
+		}
+	}
+
+	return SyMatrx;
+}
+
+std::vector<std::vector<int>> findVdbBoundingbox(std::vector<int> pos[3])
+{
+	std::vector<std::vector<int>> boundingind;
+	boundingind.resize(2);
+	boundingind[0].resize(3);
+	boundingind[1].resize(3);
+
+	int minX, minY, minZ, maxX, maxY, maxZ;
+	minX = std::numeric_limits<int>::max();
+	minY = std::numeric_limits<int>::max();
+	minZ = std::numeric_limits<int>::max();
+
+	maxX = std::numeric_limits<int>::lowest();
+	maxY = std::numeric_limits<int>::lowest();
+	maxZ = std::numeric_limits<int>::lowest();
+
+	for (size_t i = 0; i < pos[0].size(); ++i) {
+		minX = std::min(minX, pos[0][i]);
+		minY = std::min(minY, pos[1][i]);
+		minZ = std::min(minZ, pos[2][i]);
+
+		maxX = std::max(maxX, pos[0][i]);
+		maxY = std::max(maxY, pos[1][i]);
+		maxZ = std::max(maxZ, pos[2][i]);
+	}
+
+	boundingind[0][0] = minX;
+	boundingind[0][1] = minY;
+	boundingind[0][2] = minZ;
+
+	boundingind[1][0] = maxX;
+	boundingind[1][1] = maxY;
+	boundingind[1][2] = maxZ;
+
+	return boundingind;
+}
+
 int main()
 {
+
+	// 输出带颜色的文本
+	printf("%sRed Text%s\n", RED, RESET);
+	printf("%sGreen Text%s\n", GREEN, RESET);
+	printf("%sYellow Text%s\n", YELLOW, RESET);
+	printf("%sBlue Text%s\n", BLUE, RESET);
+
+	int boundingind[2][3] = { std::numeric_limits<int>::max(), std::numeric_limits<int>::max(), std::numeric_limits<int>::max(), std::numeric_limits<int>::lowest(), std::numeric_limits<int>::lowest(), std::numeric_limits<int>::lowest() };
+
+	// 示例矩阵
+	std::vector<std::vector<int>> originalMatrix = {
+		{1, 2, 3},
+		{4, 5, 6},
+		{7, 8, 9}
+	};
+
+	std::vector<int> epos[3];
+	int rows = 3;
+	int cols = 10;
+	//epos.resize(rows);
+	for (int i = 0; i < 3; i++) epos[i].resize(cols);
+	int t = 1;
+
+	for (int j = 0; j < epos[0].size(); ++j)
+	{
+		for (int i = 0; i < 3; ++i)
+		{
+			epos[i][j] = t;
+			t = t + 1;
+		}
+	}
+
+	std::vector<std::vector<int>> bound_ = findVdbBoundingbox(epos);
+	for (const auto& row : bound_) {
+		for (int value : row) {
+			std::cout << value << " ";
+		}
+		std::cout << std::endl;
+	}
+
+	std::vector<std::vector<int>> epos2;
+	epos2.resize(rows);
+	for (int i = 0; i < 3; i++) epos2[i] = epos[i];
+
+	// 打印
+	std::cout << "Origin Matrix:" << std::endl;
+	for (const auto& row : epos2) {
+		for (int value : row) {
+			std::cout << value << " ";
+		}
+		std::cout << std::endl;
+	}
+
+	std::vector<std::vector<int>> SymMatrix;
+	for (int i = 0; i < 6; ++i)
+	{
+		SymMatrix = SymmetryMatrix3(epos, bound_, i);
+
+		// 打印翻转后的矩阵
+		std::cout << "Symmetry Matrix: " << i <<  std::endl;
+		for (const auto& row : SymMatrix) {
+			for (int value : row) {
+				std::cout << value << " ";
+			}
+			std::cout << std::endl;
+		}
+	}
+
+	// 拼接两个矩阵
+	std::vector<std::vector<int>> concatenatedMatrix = concatenateMatrices(epos2, SymMatrix);
+	std::vector<int> concatenatedMatrix2[3];
+	for (int i = 0; i < 3; i++) concatenatedMatrix2[i] = concatenatedMatrix[i];
+
+	// 打印拼接后的矩阵
+	std::cout << "Concatenated Matrix:" << std::endl;
+	for (const auto& row : concatenatedMatrix2) {
+		for (int value : row) {
+			std::cout << value << " ";
+		}
+		std::cout << std::endl;
+	}
 
 	float angle_epsilon = 170 / 180;
 	float test1 = 10., test2 = 20.;

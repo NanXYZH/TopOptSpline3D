@@ -12,6 +12,7 @@
 #include "tictoc.h"
 #include <set>
 #include <random>
+#include <limits>
 
 #include <CGAL/Polygon_mesh_processing\distance.h>
 #include "CGAL/Surface_mesh.h"
@@ -632,11 +633,17 @@ std::string HierarchyGrid::getModeStr(Mode mode)
 void grid::HierarchyGrid::log(int itn)
 {
 	char fn[100];
+
 	if (_logFlag & mask_log_density) {
 		sprintf_s(fn, "density%04d.vdb", itn);
 		printf("-- writing density to %s\n", fn);
 		//writeDensity(getPath(fn));
 		writeDensityac(getPath(fn));
+
+		sprintf_s(fn, "symmdensity%04d.vdb", itn);
+		printf("-- writing symm density to %s\n", fn);
+		//writeDensity(getPath(fn));
+		writeDensityac_symmetry(getPath(fn), 0);
 	}
 	if (_logFlag & mask_log_compliance) {
 		sprintf_s(fn, "compliance%04d.vdb", itn);
@@ -1275,6 +1282,13 @@ void HierarchyGrid::writeDensity(const std::string& filename)
 			eidoffset++;
 		}
 	}
+
+	if (boundingind[0][0] == std::numeric_limits<int>::max())
+	{
+		findVdbBoundingbox(epos);
+		printf("%s Finish Find Vdb Bounding Box : %s\n", GREEN, RESET);
+		std::cout << boundingind[0][0] << ", " << boundingind[0][1] << ", " << boundingind[0][2] << " | " << boundingind[1][0] << ", " << boundingind[1][1] << ", " << boundingind[1][2] << std::endl;
+	}
 	
 	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
 }
@@ -1325,6 +1339,14 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 			eidoffset++;
 		}
 	}
+
+	if (boundingind[0][0] == std::numeric_limits<int>::max())
+	{
+		findVdbBoundingbox(epos);
+		printf("%s Finish Find Vdb Bounding Box : %s\n", GREEN, RESET);
+		std::cout << boundingind[0][0] << ", " << boundingind[0][1] << ", " << boundingind[0][2] << " | " << boundingind[1][0] << ", " << boundingind[1][1] << ", " << boundingind[1][2] << std::endl;
+	}
+
 #ifdef ENABLE_MATLAB
 	Eigen::Matrix<int, -1, -1> eidx_;
 	eidx_.resize(_gridlayer[0]->n_elements, 3);
@@ -1360,6 +1382,296 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 	eigen2ConnectedMatlab("epos", epos_);
 #endif
 	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
+}
+
+// 
+void HierarchyGrid::writeDensityac_symmetry(const std::string& filename, int type_)
+{
+	// x(yoz plane) 01 
+	// y(xoz plane) 23 
+	// z(xoy plane) 45 
+	// 0 2 4 left
+	// 1 3 5 right
+	printf("-- writing vdb to %s\n", filename.c_str());
+
+	std::vector<int> eidmaphost(_gridlayer[0]->n_elements);
+	gpu_manager_t::download_buf(eidmaphost.data(), _gridlayer[0]->_gbuf.eidmap, sizeof(int) * _gridlayer[0]->n_elements);
+	std::vector<float> rhohost(_gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(rhohost.data(), _gridlayer[0]->_gbuf.rho_e, sizeof(float) * _gridlayer[0]->n_gselements);
+
+	std::vector<int> epos[3];
+	std::vector<double> eposf[3];
+	for (int i = 0; i < 3; i++) epos[i].resize(_gridlayer[0]->n_elements * 2);
+	for (int i = 0; i < 3; i++) eposf[i].resize(_gridlayer[0]->n_elements * 2);
+
+	std::cout << "[TEST] in write vdb: " << _gridlayer[0]->n_elements << std::endl;
+
+	std::vector<float> evalue;
+	evalue.resize(_gridlayer[0]->n_elements * 2);
+
+	double eh = elementLength();
+
+	double boxOrigin[3] = { _gridlayer[0]->_box[0][0],_gridlayer[0]->_box[0][1],_gridlayer[0]->_box[0][2] };
+
+	int boundindex[2][3] = { 0 };
+
+	int ereso = _gridlayer[0]->_ereso;
+
+	auto& esat = elesatlist[0];
+
+	for (int i = 0; i < esat._bitArray.size(); i++) {
+		int eword = esat._bitArray[i];
+		int eidbase = esat._chunkSat[i];
+
+		int eidoffset = 0;
+		for (int ji = 0; ji < BitCount<unsigned int>::value; ji++) {
+			if (!read_bit(eword, ji)) continue;
+			int bitid = i * BitCount<unsigned int>::value + ji;
+			int bitpos[3] = { bitid % ereso, bitid / ereso % ereso, bitid / ereso / ereso };
+			int eid = eidoffset + eidbase;
+			int rhoid = eidmaphost[eid];
+
+			std::vector<int> sybitpos = SymmetryPoint(bitpos[0], bitpos[1], bitpos[2], type_);
+			for (int k = 0; k < 3; k++)
+			{
+				epos[k][eid] = bitpos[k];
+				eposf[k][eid] = bitpos[k] * eh + 0.5 * eh + boxOrigin[k];
+				if (boundingind[0][0] != std::numeric_limits<int>::max())
+				{
+					epos[k][eid + _gridlayer[0]->n_elements] = sybitpos[k];
+					eposf[k][eid + _gridlayer[0]->n_elements] = sybitpos[k] * eh + 0.5 * eh + boxOrigin[k];
+				}				
+			}
+			evalue[eid] = rhohost[rhoid];
+			if (boundingind[0][0] != std::numeric_limits<int>::max())
+			{
+				evalue[eid + _gridlayer[0]->n_elements] = rhohost[rhoid];
+			}
+			eidoffset++;		
+		}
+	}
+
+	if (boundingind[0][0] == std::numeric_limits<int>::max())
+	{
+		findVdbBoundingbox(epos);
+		printf("%s Finish Find Vdb Bounding Box : %s\n", GREEN, RESET);
+		std::cout << boundingind[0][0] << ", " << boundingind[0][1] << ", " << boundingind[0][2] << " | " << boundingind[1][0] << ", " << boundingind[1][1] << ", " << boundingind[1][2] << std::endl;
+
+		for (int i = 0; i < esat._bitArray.size(); i++) {
+			int eword = esat._bitArray[i];
+			int eidbase = esat._chunkSat[i];
+
+			int eidoffset = 0;
+			for (int ji = 0; ji < BitCount<unsigned int>::value; ji++) {
+				if (!read_bit(eword, ji)) continue;
+				int bitid = i * BitCount<unsigned int>::value + ji;
+				int bitpos[3] = { bitid % ereso, bitid / ereso % ereso, bitid / ereso / ereso };
+				int eid = eidoffset + eidbase;
+				int rhoid = eidmaphost[eid];
+
+				std::vector<int> sybitpos = SymmetryPoint(bitpos[0], bitpos[1], bitpos[2], type_);
+				for (int k = 0; k < 3; k++)
+				{
+					epos[k][eid] = bitpos[k];
+					eposf[k][eid] = bitpos[k] * eh + 0.5 * eh + boxOrigin[k];
+					if (boundingind[0][0] != std::numeric_limits<int>::max())
+					{
+						epos[k][eid + _gridlayer[0]->n_elements] = sybitpos[k];
+						eposf[k][eid + _gridlayer[0]->n_elements] = sybitpos[k] * eh + 0.5 * eh + boxOrigin[k];
+					}
+				}
+				evalue[eid] = rhohost[rhoid];
+				if (boundingind[0][0] != std::numeric_limits<int>::max())
+				{
+					evalue[eid + _gridlayer[0]->n_elements] = rhohost[rhoid];
+				}
+				eidoffset++;
+			}
+		}
+	}
+
+
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<int, -1, -1> eidx_;
+	eidx_.resize(_gridlayer[0]->n_elements * 2, 3);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements * 2; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			eidx_(i, j) = epos[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("eid_sy", eidx_);
+
+	Eigen::Matrix<float, -1, 1> evalue_;
+	evalue_.resize(_gridlayer[0]->n_elements * 2, 1);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements * 2; i++)
+	{
+		evalue_(i, 1) = evalue[i];
+	}
+	eigen2ConnectedMatlab("rhoe_sy", evalue_);
+
+	Eigen::Matrix<double, -1, -1> epos_;
+	epos_.resize(_gridlayer[0]->n_elements * 2, 3);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements * 2; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			epos_(i, j) = eposf[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("epos_sy", epos_);
+#endif
+	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
+}
+
+void grid::HierarchyGrid::findVdbBoundingbox(std::vector<int> pos[3])
+{
+	int minX, minY, minZ, maxX, maxY, maxZ;
+	minX = std::numeric_limits<int>::max();
+	minY = std::numeric_limits<int>::max();
+	minZ = std::numeric_limits<int>::max();
+
+	maxX = std::numeric_limits<int>::lowest();
+	maxY = std::numeric_limits<int>::lowest();
+	maxZ = std::numeric_limits<int>::lowest();
+
+	for (size_t i = 0; i < pos[0].size(); ++i) {
+		minX = std::min(minX, pos[0][i]);
+		minY = std::min(minY, pos[1][i]);
+		minZ = std::min(minZ, pos[2][i]);
+
+		maxX = std::max(maxX, pos[0][i]);
+		maxY = std::max(maxY, pos[1][i]);
+		maxZ = std::max(maxZ, pos[2][i]);
+	}
+
+	boundingind[0][0] = minX;
+	boundingind[0][1] = minY;
+	boundingind[0][2] = minZ;
+
+	boundingind[1][0] = maxX;
+	boundingind[1][1] = maxY;
+	boundingind[1][2] = maxZ;
+}
+
+std::vector<int> grid::HierarchyGrid::SymmetryPoint(int px, int py, int pz, int plane)
+{
+	std::vector<int> SyPoint;
+	// x(yoz plane) 01 
+	// y(xoz plane) 23 
+	// z(xoy plane) 45 
+	// 0 2 4 left
+	// 1 3 5 right
+
+	SyPoint.resize(3);
+	int tmp[3] = {px, py, pz};
+
+		for (int j = 0; j < 3; j++)
+		{
+			if (plane % 2 == 0)
+			{
+				tmp[j] = tmp[j] - boundingind[0][j];
+			}
+			else
+			{
+				tmp[j] = tmp[j] - boundingind[1][j];
+			}
+		}
+
+		if (plane == 0 || plane == 1)
+		{
+			tmp[0] = -tmp[0];
+		}
+		else if (plane == 2 || plane == 3)
+		{
+			tmp[1] = -tmp[1];
+		}
+		else if (plane == 4 || plane == 5)
+		{
+			tmp[2] = -tmp[2];
+		}
+
+		for (int j = 0; j < 3; j++)
+		{
+			if (plane % 2 == 0)
+			{
+				tmp[j] = tmp[j] + boundingind[0][j];
+			}
+			else
+			{
+				tmp[j] = tmp[j] + boundingind[1][j];
+			}
+
+			SyPoint[j] = tmp[j];
+		}
+
+	return SyPoint;
+}
+
+std::vector<std::vector<int>> grid::HierarchyGrid::SymmetryMatrix(const std::vector<int> matrix[3], std::vector<std::vector<int>> bdbox, int plane)
+{
+	std::vector<std::vector<int>> SyMatrx;
+	// x(yoz plane) 01 
+	// y(xoz plane) 23 
+	// z(xoy plane) 45 
+	// 0 2 4 left
+	// 1 3 5 right
+
+	SyMatrx.resize(3);
+	for (int i = 0; i < 3; i++)
+	{
+		SyMatrx[i].resize(matrix[0].size());
+	}
+
+	for (int i = 0; i < matrix[0].size(); ++i)
+	{
+		int tmp[3];
+
+		for (int j = 0; j < 3; j++)
+		{
+			tmp[j] = matrix[j][i];
+			if (plane % 2 == 0)
+			{
+				tmp[j] = tmp[j] - bdbox[0][j];
+			}
+			else
+			{
+				tmp[j] = tmp[j] - bdbox[1][j];
+			}
+		}
+
+		if (plane == 0 || plane == 1)
+		{
+			tmp[0] = -tmp[0];
+		}
+		else if (plane == 2 || plane == 3)
+		{
+			tmp[1] = -tmp[1];
+		}
+		else if (plane == 4 || plane == 5)
+		{
+			tmp[2] = -tmp[2];
+		}
+
+		for (int j = 0; j < 3; j++)
+		{
+			if (plane % 2 == 0)
+			{
+				tmp[j] = tmp[j] + bdbox[0][j];
+			}
+			else
+			{
+				tmp[j] = tmp[j] + bdbox[1][j];
+			}
+
+			SyMatrx[j][i] = tmp[j];
+		}
+	}
+	return SyMatrx;
 }
 
 
@@ -3361,15 +3673,15 @@ void Grid::generate_spline_surface_nodes(float beta)
 	std::vector<float> bgnodex;
 	std::vector<float> bgnodey;
 	std::vector<float> bgnodez;
-	int cur_ereso;
-	if (_ereso > 250)
-	{
-		cur_ereso = _ereso / 2;
-	}
-	else
-	{
-		cur_ereso = _ereso;
-	}
+	int cur_ereso = 64;
+	//if (_ereso > 250)
+	//{
+	//	cur_ereso = _ereso / 2;
+	//}
+	//else
+	//{
+	//	cur_ereso = _ereso;
+	//}
 	std::cout << "Element Resolution for marching cube ----- " << cur_ereso << std::endl;
 	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val, cur_ereso, beta);
 
