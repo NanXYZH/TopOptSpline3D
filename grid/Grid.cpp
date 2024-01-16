@@ -1381,7 +1381,7 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 	}
 	eigen2ConnectedMatlab("epos", epos_);
 #endif
-	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
+	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue); 
 }
 
 // 
