@@ -9,6 +9,16 @@
         }
     ],
     "force":[
+        {
+            "type":"const",
+            "norm":10,
+            "direction":[0,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[-2.074289,80.173958,10.027212],
+            "radius":9.8
+            }
+        }
     ],
     "loadarea":[
         {

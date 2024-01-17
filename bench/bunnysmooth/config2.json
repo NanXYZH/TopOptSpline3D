@@ -1,0 +1,45 @@
+{
+    "model":"bunny.obj",
+    "fixedarea":[
+        {
+            "type": "halfspace",
+            "p1": [15.3417,30.6131,3.9],
+            "p2": [40.0, 60.0, 3.9],
+            "p3": [40.0, 1.0, 3.9]
+        }
+    ],
+    "force":[
+{
+            "type":"const",
+            "norm":1,
+            "direction":[0,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[0.524753,-1.15485,13.1516],
+            "radius":0.5
+            }
+        },
+        {
+            "type":"const",
+            "norm":1,
+            "direction":[1,0,0],
+            "region":{
+            "type":"sphere",
+            "center":[-8.94088,-1.62849,9.44507],
+            "radius":0.5
+            }
+        }
+ ],
+    "loadarea":[
+        {
+            "type":"sphere",
+            "center":[0.524753,-1.15485,13.1516],
+            "radius":0.5
+        },
+        {
+            "type":"sphere",
+            "center":[-8.94088,-1.62849,9.44507],
+            "radius":0.5
+        }
+    ]
+}

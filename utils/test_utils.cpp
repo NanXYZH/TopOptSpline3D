@@ -1104,14 +1104,14 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 			ss_value = 1.0;
 			drip_value = 0.0;
 		}
-		else if(itn < 20)
-		{
-			std::cout << "\033[34m-- [Optimization of Coeffs without self-supporting] --\033[0m" << std::endl;
-			initSSCSens(float{ 0.0 });
-			initDripCSens(float{ 0.0 });
-			ss_value = 1.0;
-			drip_value = 0.0;
-		}
+		//else if(itn < 20)
+		//{
+		//	std::cout << "\033[34m-- [Optimization of Coeffs without self-supporting] --\033[0m" << std::endl;
+		//	initSSCSens(float{ 0.0 });
+		//	initDripCSens(float{ 0.0 });
+		//	ss_value = 1.0;
+		//	drip_value = 0.0;
+		//}
 		else
 		{
 			if (itn > 30)
