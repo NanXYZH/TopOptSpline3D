@@ -981,14 +981,14 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	grids[0]->reset_displacement();
 	grids.writeSupportForce(grids.getPath("fs"));
 
-	grids.testShell();
+	//grids.testShell();
 	grids.writeNodePos(grids.getPath("nodepos"), *grids[0]);
 	grids.writeElementPos(grids.getPath("elepos"), *grids[0]);
 
 #if 1
 	// MARK: ADD user-defined input	
 	//std::cout << "--TEST volume ratio: " << params.volume_ratio  << "..."<< std::endl;
-	initCoeffs(0.5);
+	initCoeffs(params.volume_ratio);
 	grids[0]->set_spline_knot_series();
 	grids.writeCoeff(grids.getPath("coeff"));
 	grids[0]->set_spline_knot_infoSymbol();
@@ -1041,8 +1041,8 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	mma.init(params.min_cijk, 1);
 	float sensScale = 1e0;
 	float volScale = 1e3;
-	float SSScale = 1e1;
-	float dripScale = 1e3;
+	float SSScale = 1e0;
+	float dripScale = 1e0;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -1116,12 +1116,13 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		{
 			if (itn > 30)
 			{
-				SSScale = 1e3;
-				dripScale = 1e5;
+				SSScale = 1e1;
+				dripScale = 1e3;
 			}
 			else if (itn > 50)
 			{
-				dripScale = 1e8;
+				SSScale = 1e3;
+				dripScale = 1e5;
 
 			}
 			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;

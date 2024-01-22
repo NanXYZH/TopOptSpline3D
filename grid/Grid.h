@@ -966,6 +966,8 @@ namespace grid {
 		void writeDensityac(const std::string& filename);
 		void writeDensityac_symmetry(const std::string& filename, int type_);
 
+		void writeDensityac_shell(const std::string& filename, const std::string& filename_noshell, const std::string& filename_shell, int iter_);
+
 		void findVdbBoundingbox(std::vector<int> pos[3]);
 		std::vector<int> SymmetryPoint(int px, int py, int pz, int plane);
 		std::vector<std::vector<int>> SymmetryMatrix(const std::vector<int> matrix[3], std::vector<std::vector<int>> bdbox, int plane);

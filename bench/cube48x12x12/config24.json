@@ -1,0 +1,44 @@
+{
+    "model":"cube48x12x12.obj",
+    "fixedarea":[
+        {
+            "type": "sphere",
+            "radius": 1.0,
+            "center": [0.0, 0.0, 0.0]
+        },
+{
+            "type": "sphere",
+            "radius": 1.0,
+            "center": [0.0, 12.0, 0.0]
+        },
+{
+            "type": "sphere",
+            "radius": 1.0,
+            "center": [48.0, 0.0, 0.0]
+        },
+{
+            "type": "sphere",
+            "radius": 1.0,
+            "center": [48.0, 12.0, 0.0]
+        }
+    ],
+    "force":[
+{
+            "type":"const",
+            "norm":1,
+            "direction":[0,0,-1],
+            "region":{
+            "type": "box",
+            "q": [23.0,5.0, 11.9999999999],
+            "p": [25.0,7.0, 12.9999999999999]
+            }
+        }
+ ],
+    "loadarea":[ 
+        {
+            "type": "box",
+            "q": [23.0,5.0, 11.9999999999],
+            "p": [25.0,7.0, 12.9999999999999]
+        }
+    ]
+}

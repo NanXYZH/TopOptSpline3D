@@ -633,17 +633,33 @@ std::string HierarchyGrid::getModeStr(Mode mode)
 void grid::HierarchyGrid::log(int itn)
 {
 	char fn[100];
+	char fn_ns[100];
+	char shell_[100];
 
 	if (_logFlag & mask_log_density) {
-		sprintf_s(fn, "density%04d.vdb", itn);
-		printf("-- writing density to %s\n", fn);
-		//writeDensity(getPath(fn));
-		writeDensityac(getPath(fn));
+		if (_setting.shell_width == 0)
+		{
+			sprintf_s(fn, "density%04d.vdb", itn);
+			printf("-- writing density to %s\n", fn);
+			//writeDensity(getPath(fn));
+			writeDensityac(getPath(fn));
 
-		sprintf_s(fn, "symmdensity%04d.vdb", itn);
-		printf("-- writing symm density to %s\n", fn);
-		//writeDensity(getPath(fn));
-		writeDensityac_symmetry(getPath(fn), 0);
+			sprintf_s(fn, "symmdensity%04d.vdb", itn);
+			printf("-- writing symm density to %s\n", fn);
+			//writeDensity(getPath(fn));
+			writeDensityac_symmetry(getPath(fn), 0);
+		} 
+		else
+		{
+			sprintf_s(fn, "density%04d.vdb", itn);
+			sprintf_s(fn_ns, "nsdensity%04d.vdb", itn);
+			sprintf_s(shell_, "shell.vdb");
+			printf("-- writing density to %s\n", fn);
+			printf("-- writing density to %s\n", fn_ns);
+			//writeDensity(getPath(fn));
+			writeDensityac_shell(getPath(fn), getPath(fn_ns), getPath(shell_), itn);
+		}
+		
 	}
 	if (_logFlag & mask_log_compliance) {
 		sprintf_s(fn, "compliance%04d.vdb", itn);
@@ -1674,6 +1690,136 @@ std::vector<std::vector<int>> grid::HierarchyGrid::SymmetryMatrix(const std::vec
 	return SyMatrx;
 }
 
+
+// actual pos
+void HierarchyGrid::writeDensityac_shell(const std::string& filename, const std::string& filename_noshell,const std::string& filename_shell, int iter_)
+{
+	printf("-- writing vdb to %s\n", filename.c_str());
+
+	std::vector<int> eidmaphost(_gridlayer[0]->n_elements);
+	gpu_manager_t::download_buf(eidmaphost.data(), _gridlayer[0]->_gbuf.eidmap, sizeof(int) * _gridlayer[0]->n_elements);
+	std::vector<float> rhohost(_gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(rhohost.data(), _gridlayer[0]->_gbuf.rho_e, sizeof(float) * _gridlayer[0]->n_gselements);
+	std::vector<int> eflags(_gridlayer[0]->n_gselements);
+	gpu_manager_t::download_buf(eflags.data(), _gridlayer[0]->_gbuf.eBitflag, sizeof(int) * _gridlayer[0]->n_gselements);
+
+	std::vector<int> epos[3];
+	std::vector<double> eposf[3];
+	for (int i = 0; i < 3; i++) epos[i].resize(_gridlayer[0]->n_elements);
+	for (int i = 0; i < 3; i++) eposf[i].resize(_gridlayer[0]->n_elements);
+
+	std::vector<float> evalue;
+	evalue.resize(_gridlayer[0]->n_elements);
+	std::vector<float> evalue_noshell;
+	evalue_noshell.resize(_gridlayer[0]->n_elements);
+	std::vector<float> evalue_shell;
+	evalue_shell.resize(_gridlayer[0]->n_elements);
+
+	double eh = elementLength();
+
+	double boxOrigin[3] = { _gridlayer[0]->_box[0][0],_gridlayer[0]->_box[0][1],_gridlayer[0]->_box[0][2] };
+
+	int ereso = _gridlayer[0]->_ereso;
+
+	auto& esat = elesatlist[0];
+
+	for (int i = 0; i < esat._bitArray.size(); i++) {
+		int eword = esat._bitArray[i];
+		int eidbase = esat._chunkSat[i];
+
+		int eidoffset = 0;
+		for (int ji = 0; ji < BitCount<unsigned int>::value; ji++) {
+			if (!read_bit(eword, ji)) continue;
+			int bitid = i * BitCount<unsigned int>::value + ji;
+			int bitpos[3] = { bitid % ereso, bitid / ereso % ereso, bitid / ereso / ereso };
+			int eid = eidoffset + eidbase;
+			int rhoid = eidmaphost[eid];
+			for (int k = 0; k < 3; k++)
+			{
+				epos[k][eid] = bitpos[k];
+				eposf[k][eid] = bitpos[k] * eh + 0.5 * eh + boxOrigin[k];
+			}
+			evalue[eid] = rhohost[rhoid];
+			evalue_noshell[eid] = rhohost[rhoid];
+			evalue_shell[eid] = 0;
+			if (eflags[eid] & grid::Grid::mask_shellelement)
+			{				
+				evalue_noshell[eid] = 0;
+				evalue_shell[eid] = 1;
+			}
+			eidoffset++;
+		}
+	}
+
+	if (boundingind[0][0] == std::numeric_limits<int>::max())
+	{
+		findVdbBoundingbox(epos);
+		printf("%s Finish Find Vdb Bounding Box : %s\n", GREEN, RESET);
+		std::cout << boundingind[0][0] << ", " << boundingind[0][1] << ", " << boundingind[0][2] << " | " << boundingind[1][0] << ", " << boundingind[1][1] << ", " << boundingind[1][2] << std::endl;
+	}
+
+#ifdef ENABLE_MATLAB
+	Eigen::Matrix<int, -1, -1> eidx_;
+	eidx_.resize(_gridlayer[0]->n_elements, 3);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			eidx_(i, j) = epos[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("eid", eidx_);
+
+	Eigen::Matrix<float, -1, 1> evalue_;
+	evalue_.resize(_gridlayer[0]->n_elements, 1);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+	{
+		evalue_(i, 1) = evalue[i];
+	}
+	eigen2ConnectedMatlab("rhoe", evalue_);
+
+	Eigen::Matrix<float, -1, 1> evalue2_;
+	evalue2_.resize(_gridlayer[0]->n_elements, 1);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+	{
+		evalue2_(i, 1) = evalue_noshell[i];
+	}
+	eigen2ConnectedMatlab("rhoe_noshell", evalue2_);
+
+	if (iter_ == 1)
+	{
+		Eigen::Matrix<float, -1, 1> evalue3_;
+		evalue3_.resize(_gridlayer[0]->n_elements, 1);
+
+		for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+		{
+			evalue3_(i, 1) = evalue_shell[i];
+		}
+		eigen2ConnectedMatlab("rhoeofshell", evalue3_);
+	}
+
+	Eigen::Matrix<double, -1, -1> epos_;
+	epos_.resize(_gridlayer[0]->n_elements, 3);
+
+	for (int i = 0; i < _gridlayer[0]->n_elements; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			epos_(i, j) = eposf[j][i];
+		}
+	}
+	eigen2ConnectedMatlab("epos", epos_);
+#endif
+	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
+	openvdb_wrapper_t<float>::grid2openVDBfile(filename_noshell, epos, evalue_noshell);
+	if (iter_ == 1)
+	{
+		openvdb_wrapper_t<float>::grid2openVDBfile(filename_shell, epos, evalue_shell);
+	}
+}
 
 void grid::HierarchyGrid::writeSurfaceElement(const std::string& filename)
 {
