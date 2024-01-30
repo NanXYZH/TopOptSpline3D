@@ -644,20 +644,20 @@ void grid::HierarchyGrid::log(int itn)
 			//writeDensity(getPath(fn));
 			writeDensityac(getPath(fn));
 
-			sprintf_s(fn, "symmdensity%04d.vdb", itn);
-			printf("-- writing symm density to %s\n", fn);
-			//writeDensity(getPath(fn));
-			writeDensityac_symmetry(getPath(fn), 0);
+			//sprintf_s(fn, "symmdensity%04d.vdb", itn);
+			//printf("-- writing symm density to %s\n", fn);
+			////writeDensity(getPath(fn));
+			//writeDensityac_symmetry(getPath(fn), 0);
 		} 
 		else
 		{
 			sprintf_s(fn, "density%04d.vdb", itn);
 			sprintf_s(fn_ns, "nsdensity%04d.vdb", itn);
-			sprintf_s(shell_, "shell.vdb");
+			sprintf_s(shell_, "shell_.vdb");
 			printf("-- writing density to %s\n", fn);
 			printf("-- writing density to %s\n", fn_ns);
-			//writeDensity(getPath(fn));
-			writeDensityac_shell(getPath(fn), getPath(fn_ns), getPath(shell_), itn);
+			writeDensity(getPath(fn));
+			//writeDensityac_shell(getPath(fn), getPath(fn_ns), getPath(shell_), itn);
 		}
 		
 	}
@@ -1334,6 +1334,8 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 	int ereso = _gridlayer[0]->_ereso;
 
 	auto& esat = elesatlist[0];
+
+	int element_count = 0;
 	
 	for (int i = 0; i < esat._bitArray.size(); i++) {
 		int eword = esat._bitArray[i];
@@ -1353,8 +1355,11 @@ void HierarchyGrid::writeDensityac(const std::string& filename)
 			}
 			evalue[eid] = rhohost[rhoid];
 			eidoffset++;
+			element_count++;
 		}
 	}
+
+	printf("-- rho element to %d\n", element_count);
 
 	if (boundingind[0][0] == std::numeric_limits<int>::max())
 	{

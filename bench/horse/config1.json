@@ -1,0 +1,30 @@
+{
+    "model":"horse15s.obj",
+    "fixedarea":[
+        {
+            "type":"halfspace",
+            "p1": [6.10444, 7.85462, 13.031],
+            "p2": [6.10444, 10.6947, 13.046],
+            "p3": [6.10444, 9.86362, 9.84309]
+        }
+    ],
+    "force":[
+        {
+            "type":"const",
+            "norm":0.5,
+            "direction":[0,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[16.5514, 9.07169, 15.0865],
+            "radius":0.5
+            }
+        }
+    ],
+    "loadarea":[
+        {
+            "type":"sphere",
+            "center":[16.5514, 9.07169, 15.0865],
+            "radius":0.5
+        }
+    ]
+}

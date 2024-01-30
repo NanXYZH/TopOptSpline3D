@@ -1,0 +1,45 @@
+{
+    "model":"fertility15.obj",
+    "fixedarea":[
+        {
+            "type":"halfspace",
+            "p1": [12.1714, 7.93387, 3.6],
+            "p2": [14.4634, 8.14603, 3.6],
+            "p3": [13.6301, 8.04603, 3.6]
+        }
+    ],
+    "force":[
+        {
+            "type":"const",
+            "norm":1,
+            "direction":[0,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[10.9106,8.13123,16.8494],
+            "radius":0.5
+            }
+        },
+        {
+            "type":"const",
+            "norm":1,
+            "direction":[-1,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[16.5542, 8.29425, 13.0833],
+            "radius":0.5
+            }
+        }
+    ],
+    "loadarea":[
+        {
+            "type":"sphere",
+            "center":[10.9106,8.13123,16.8494],
+            "radius":0.5
+        },
+        {
+            "type":"sphere",
+            "center":[16.5542, 8.29425, 13.0833],
+            "radius":0.5
+        }
+    ]
+}

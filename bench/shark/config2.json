@@ -1,0 +1,45 @@
+{
+    "model":"shark15s.obj",
+    "fixedarea":[
+        {
+            "type":"halfspace",
+            "p1": [10.3556, 8.60874, 3.50],
+            "p2": [11.2496, 9.07984, 3.50],
+            "p3": [11.133, 7.14502, 3.50]
+        }
+    ],
+    "force":[
+        {
+            "type":"const",
+            "norm":1,
+            "direction":[-1,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[11.503218, 8.867647, 12.013511],
+            "radius":0.75
+            }
+        },
+        {
+            "type":"const",
+            "norm":1,
+            "direction":[1,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[7.76573, 8.770021, 14.254981],
+            "radius":0.75
+            }
+        }
+    ],
+    "loadarea":[
+        {
+            "type":"sphere",
+            "center":[11.503218, 8.867647, 12.013511],
+            "radius":0.75
+        },
+        {
+            "type":"sphere",
+            "center":[7.76573, 8.770021, 14.254981],
+            "radius":0.75
+        }
+    ]
+}

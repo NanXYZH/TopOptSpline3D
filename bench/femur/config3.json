@@ -1,0 +1,30 @@
+{
+    "model":"femur15.obj",
+    "fixedarea":[
+        {
+            "type":"halfspace",
+            "p1": [8.2866, 10.1761, 3.59728],
+            "p2": [8.97188, 10.0471, 3.59728],
+            "p3": [8.45869, 9.32404, 3.59728]
+        }
+    ],
+    "force":[
+        {
+            "type":"const",
+            "norm":1.5,
+            "direction":[0,0,1],
+            "region":{
+            "type":"sphere",
+            "center":[8.20021, 7.27692, 16.6392],
+            "radius":0.5
+            }
+        }
+    ],
+    "loadarea":[
+        {
+            "type":"sphere",
+            "center":[8.20021, 7.27692, 16.6392],
+            "radius":0.5
+        }
+    ]
+}

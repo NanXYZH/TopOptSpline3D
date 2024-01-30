@@ -1,0 +1,45 @@
+{
+    "model":"kitten.obj",
+    "fixedarea":[
+        {
+            "type":"halfspace",
+            "p1": [15.3417,30.6131,-2.456773],
+            "p2": [40.0, 60.0, -2.456773],
+            "p3": [40.0, 1.0, -2.456773]
+        }
+    ],
+    "force":[
+        {
+            "type":"const",
+            "norm":2,
+            "direction":[0,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[0.012901, -4.54129, 80.7825],
+            "radius":1
+            }
+        },
+        {
+            "type":"const",
+            "norm":2,
+            "direction":[1,0,-1],
+            "region":{
+            "type":"sphere",
+            "center":[-21.8153,-2.41172,26.4223],
+            "radius":0.5
+            }
+        }
+    ],
+    "loadarea":[
+        {
+            "type":"sphere",
+            "center":[0.012901, -4.54129, 80.7825],
+            "radius":1
+        },
+        {
+            "type":"sphere",
+            "center":[-21.8153,-2.41172,26.4223],
+            "radius":0.5
+        }
+    ]
+}

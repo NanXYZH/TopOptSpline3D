@@ -6640,12 +6640,14 @@ void grid::Grid::compute_spline_drip_constraint_dcoeff(void)
 	gpu_manager_t::pass_buf_to_matlab("dripc_sens_test", dc_test_host, n_cijk());
 
 	gpu_manager_t::pass_buf_to_matlab("dripc_sens2", dc_host, n_cijk());
-#endif
 
 	cudaFree(dc_test);
 	dc_test = nullptr;
 	delete[] dc_test_host;
 	dc_test_host = nullptr;
+#endif
+
+	
 
 	cudaFree(dc_tmp);
 	dc_tmp = nullptr;

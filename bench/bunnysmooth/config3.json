@@ -11,12 +11,22 @@
     "force":[
 {
             "type":"const",
-            "norm":1,
+            "norm":2,
             "direction":[0,0,-1],
             "region":{
             "type":"sphere",
             "center":[0.524753,-1.15485,13.1516],
-            "radius":1
+            "radius":0.5
+            }
+        },
+        {
+            "type":"const",
+            "norm":1,
+            "direction":[1,0,-0.5],
+            "region":{
+            "type":"sphere",
+            "center":[-8.94088,-1.62849,9.44507],
+            "radius":0.5
             }
         }
  ],
@@ -24,7 +34,12 @@
         {
             "type":"sphere",
             "center":[0.524753,-1.15485,13.1516],
-            "radius":1
+            "radius":0.5
+        },
+        {
+            "type":"sphere",
+            "center":[-8.94088,-1.62849,9.44507],
+            "radius":0.5
         }
     ]
 }
