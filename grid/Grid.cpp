@@ -1633,6 +1633,47 @@ std::vector<int> grid::HierarchyGrid::SymmetryPoint(int px, int py, int pz, int 
 	return SyPoint;
 }
 
+std::vector<int> grid::HierarchyGrid::SymmetryPoint2(int px, int py, int pz, int plane, int mirror_x, int mirror_y, int mirror_z)
+{
+	std::vector<int> SyPoint;
+	// x(yoz plane) 01 
+	// y(xoz plane) 23 
+	// z(xoy plane) 45 
+	// 0 2 4 left
+	// 1 3 5 right
+
+	SyPoint.resize(3);
+	int tmp[3] = { px, py, pz };
+	int mirror[3] = { mirror_x, mirror_y, mirror_z };
+
+	for (int j = 0; j < 3; j++)
+	{
+		tmp[j] = tmp[j] - mirror[j];
+	}
+
+	if (plane == 0)
+	{
+		tmp[0] = -tmp[0];
+	}
+	else if (plane == 1)
+	{
+		tmp[1] = -tmp[1];
+	}
+	else if (plane == 2)
+	{
+		tmp[2] = -tmp[2];
+	}
+
+	for (int j = 0; j < 3; j++)
+	{
+		tmp[j] = tmp[j] + mirror[j];
+
+		SyPoint[j] = tmp[j];
+	}
+
+	return SyPoint;
+}
+
 std::vector<std::vector<int>> grid::HierarchyGrid::SymmetryMatrix(const std::vector<int> matrix[3], std::vector<std::vector<int>> bdbox, int plane)
 {
 	std::vector<std::vector<int>> SyMatrx;
@@ -1899,6 +1940,123 @@ void grid::HierarchyGrid::readDensity(const std::string& filename)
 	}
 
 	gpu_manager_t::upload_buf(_gridlayer[0]->_gbuf.rho_e, rhohost.data(), sizeof(float) * _gridlayer[0]->n_gselements);
+}
+
+void grid::HierarchyGrid::rewriteDenssity(const std::string& input_filename, const std::string& symmleft, const std::string& symmright)
+{
+	// x(yoz plane) 0
+	// y(xoz plane) 1 
+	// z(xoy plane) 2 
+
+	std::vector<int> epos[3];
+	for (int i = 0; i < 3; i++) epos[i].resize(_gridlayer[0]->n_elements);
+	std::vector<float> evalue;
+	openvdb_wrapper_t<float>::openVDBfile2grid(input_filename, epos, evalue);
+
+	int type_ = 0;
+
+	findVdbBoundingbox(epos);
+	printf("%s Finish Find Vdb Bounding Box : %s\n", GREEN, RESET);
+	std::cout << boundingind[0][0] << ", " << boundingind[0][1] << ", " << boundingind[0][2] << " | " << boundingind[1][0] << ", " << boundingind[1][1] << ", " << boundingind[1][2] << std::endl;
+
+	int max_value, min_value, half_length;
+	int mirror_x = boundingind[0][0];
+	int mirror_y = boundingind[0][1];
+	int mirror_z = boundingind[0][2];
+	half_length = (boundingind[1][type_] - boundingind[0][type_] + 1) / 2 + 1;
+	half_length = half_length - 10;
+
+	int right_start = boundingind[1][0] - half_length + 1;
+	
+	printf("%s Half length : %s\n", GREEN, RESET);
+	std::cout << half_length << ", " << right_start << std::endl;
+	
+	std::vector<int> symm_epos[3];
+	std::vector<float> symm_value;
+
+	// for right
+	for (int i = 0; i < epos->size(); i++) {
+		if (epos[0][i] >= right_start) {
+			for (int j = 0; j < 3; j++)
+			{
+				symm_epos[j].push_back(epos[j][i]);			
+			}
+			symm_value.push_back(evalue[i]);
+		}
+	}
+
+	if (type_ == 0)
+	{
+		max_value = *std::max_element(symm_epos[0].begin(), symm_epos[0].end());
+		min_value = *std::min_element(symm_epos[0].begin(), symm_epos[0].end());
+
+		mirror_x = min_value;
+		for (int i = 0; i < epos->size(); i++) {
+			if (epos[0][i] >= right_start) {
+				std::vector<int> sybitpos = SymmetryPoint2(epos[0][i], epos[1][i], epos[2][i], 0, mirror_x, mirror_y, mirror_z);
+				for (int j = 0; j < 3; j++)
+				{					
+					symm_epos[j].push_back(sybitpos[j]);
+				}
+				symm_value.push_back(evalue[i]);
+			}
+		}
+	}
+	
+	std::cout << symm_value.size() << std::endl;
+	std::cout << symm_epos[0].size() << std::endl;
+	if (symm_value.size() == symm_epos[0].size())
+	{
+		openvdb_wrapper_t<float>::grid2openVDBfile(symmright, symm_epos, symm_value);
+	}
+	else
+	{
+		printf("\033[31msize of value list does not match given grid size!\033[0m\n");
+		throw std::string("size of value list does not match given grid size!");
+	}
+
+	// for left
+	std::vector<int> symml_epos[3];
+	std::vector<float> symml_value;
+	for (int i = 0; i < epos->size(); i++) {
+		if (epos[0][i] <= half_length) {
+			for (int j = 0; j < 3; j++)
+			{
+				symml_epos[j].push_back(epos[j][i]);				
+			}
+			symml_value.push_back(evalue[i]);
+		}
+	}
+
+	if (type_ == 0)
+	{
+		max_value = *std::max_element(symml_epos[0].begin(), symml_epos[0].end());
+		min_value = *std::min_element(symml_epos[0].begin(), symml_epos[0].end());
+
+		mirror_x = max_value;
+		for (int i = 0; i < epos->size(); i++) {
+			if (epos[0][i] <= half_length) {
+				std::vector<int> sybitpos = SymmetryPoint2(epos[0][i], epos[1][i], epos[2][i], 0, mirror_x, mirror_y, mirror_z);
+				for (int j = 0; j < 3; j++)
+				{
+					symml_epos[j].push_back(sybitpos[j]);
+				}
+				symml_value.push_back(evalue[i]);
+			}
+		}
+	}
+
+	std::cout << symml_value.size() << std::endl;
+	std::cout << symml_epos[0].size() << std::endl;
+	if (symml_value.size() == symml_epos[0].size())
+	{
+		openvdb_wrapper_t<float>::grid2openVDBfile(symmleft, symml_epos, symml_value);
+	}
+	else
+	{
+		printf("\033[31msize of value list does not match given grid size!\033[0m\n");
+		throw std::string("size of value list does not match given grid size!");
+	}
 }
 
 void grid::HierarchyGrid::writeSensitivity(const std::string& filename)

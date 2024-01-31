@@ -60,6 +60,8 @@ public:
 
 	static void testUnitLoad(void);
 
+	static void testSymmDensity(void);
+
 	static void testBESO(void);
 
 	static void testSurfVoxels(void);

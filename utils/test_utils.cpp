@@ -242,6 +242,9 @@ void TestSuit::testMain(const std::string& testname)
 	if (testname == "" || testname == "None") return;
 
 	printf("\n\033[33m-- doing test on %s\n\033[0m", testname.c_str());
+	if (testname == "symmdens") {
+		testSymmDensity();
+	}
 	if (testname == "surfelements") {
 		writeSurfaceElements(grids.getPath("surfelements"));
 	}
@@ -1903,11 +1906,22 @@ void TestSuit::testUnitLoad(void)
 	std::cout << "-- compliance " << cload << std::endl;
 }
 
+void TestSuit::testSymmDensity(void)
+{
+	if (FLAGS_inputdensity == "") {
+		printf("\033[31m-- No input density file \033[0m\n");
+		exit(-1);
+	}
+	else {
+		std::cout << "-- Reading file " << FLAGS_inputdensity << std::endl;
+		//grids.readDensity(FLAGS_inputdensity);
+		grids.rewriteDenssity(FLAGS_inputdensity, "left.vdb", "right.vdb");
+	}
+}
+
 void TestSuit::testBESO(void)
 {
 	initDensities(1);
-
-	
 }
 
 void TestSuit::testSurfVoxels(void)

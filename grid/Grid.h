@@ -970,9 +970,12 @@ namespace grid {
 
 		void findVdbBoundingbox(std::vector<int> pos[3]);
 		std::vector<int> SymmetryPoint(int px, int py, int pz, int plane);
+		std::vector<int> grid::HierarchyGrid::SymmetryPoint2(int px, int py, int pz, int plane, int mirror_x, int mirror_y, int mirror_z);
 		std::vector<std::vector<int>> SymmetryMatrix(const std::vector<int> matrix[3], std::vector<std::vector<int>> bdbox, int plane);
 
 		void readDensity(const std::string& filename);
+
+		void rewriteDenssity(const std::string& input_filename, const std::string& symmleft, const std::string& symmright);
 
 		void writeSensitivity(const std::string& filename);
 
