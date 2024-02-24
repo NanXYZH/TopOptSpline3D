@@ -362,6 +362,10 @@ namespace grid {
 
 		float drip_angle = 135.0 / 180.0 * M_PI;
 
+		float drip_alpha = 4;
+		int drip_version = 0; // 1 : \phi_x \ phi_z     else : \phi_z \ norm()
+		float drip_beta_scale = 5;
+
 		float _min_coeff = 0.f;
 		float _max_coeff = 1.0f;
 		float _isosurface_value = (_min_coeff + _max_coeff) / 2;
@@ -674,6 +678,7 @@ namespace grid {
 		float global_drip_constraint(void);
 		void compute_spline_selfsupp_constraint_dcoeff(void);
 		void compute_spline_drip_constraint_dcoeff(void);
+		void compute_spline_drip_constraint_dcoeff_test(void);
 		float count_surface_points(void);
 		void scaleVector(float* p_data, size_t len, float scale);
 		void scale_spline_selfsupp_constraint_dcoeff(void);

@@ -1042,10 +1042,10 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float sensScale = 1e3;
+	float sensScale = 1e0;
 	float volScale = 1e3;
-	float SSScale = 1e1;
-	float dripScale = 1e4;
+	float SSScale = 1e-1;
+	float dripScale = 1e2;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -1119,13 +1119,13 @@ void TestSuit::testOrdinarySplineTopoptMMA(void)
 		{
 			if (itn > 80)
 			{
-				SSScale = 1e5;
-				dripScale = 1e8;
+				SSScale = 1e1;
+				dripScale = 1e4;
 			}
 			else if (itn > 30)
 			{
-				SSScale = 1e3;
-				dripScale = 1e6;
+				SSScale = 1e0;
+				dripScale = 1e3;
 
 			}
 			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;

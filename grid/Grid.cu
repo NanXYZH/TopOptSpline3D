@@ -177,6 +177,44 @@ __device__ float dappro_max1(float x, float para_func) {
 	return (-1 + x * para_func) / (1 + expf(para_func * x)) - x * para_func / (1 + expf(para_func * x)) / (1 + expf(para_func * x));
 }
 
+// extra x < 0 (-x)
+__device__ float appro_max11(float x, float para_func, float scale_max) {
+	float val = 0.f;
+	if (x < 0)
+	{
+		val = -scale_max * x;
+	}
+	else
+	{
+		val = 0;
+	}
+	return val;
+}
+
+// extra x < 0 (-x)
+__device__ float dappro_max11(float x, float para_func, float scale_max) {
+	float val = 0.f;
+	if (x < 0)
+	{
+		val = -scale_max;
+	}
+	else
+	{
+		val = 0;
+	}
+	return val;
+}
+
+// extra x < 0 (x^2)
+__device__ float appro_max111(float x, float para_func, float scale_max) {
+	return  scale_max * x * x / (1 + expf(para_func * x));
+}
+
+// extra x < 0 (x^2)
+__device__ float dappro_max111(float x, float para_func, float scale_max) {
+	return scale_max * (2 * x - x * x * para_func) / (1 + expf(para_func * x)) + scale_max * x * x * para_func / (1 + expf(para_func * x)) / (1 + expf(para_func * x));
+}
+
 // extra x > 0
 __device__ float appro_max2(float x, float para_func) {
 	return x / (1 + expf(para_func * (-x)));
@@ -185,6 +223,26 @@ __device__ float appro_max2(float x, float para_func) {
 // extra x > 0
 __device__ float dappro_max2(float x, float para_func) {
 	return (1 + x * para_func) / (1 + expf(-para_func * x)) - x * para_func / (1 + expf(-para_func * x)) / (1 + expf(-para_func * x));
+}
+
+// extra x > 0 (x)
+__device__ float appro_max22(float x, float para_func, float scale_max) {
+	return x >= 0 ? scale_max * x : 0;
+}
+
+// extra x > 0 (x)
+__device__ float dappro_max22(float x, float para_func, float scale_max) {
+	return x >= 0 ? scale_max : 0;
+}
+
+// extra x > 0 (x^2)
+__device__ float appro_max222(float x, float para_func, float scale_max) {
+	return scale_max * x * x / (1 + expf(para_func * (-x)));
+}
+
+// extra x > 0 (x^2)
+__device__ float dappro_max222(float x, float para_func, float scale_max) {
+	return scale_max * (2 * x + x * x * para_func) / (1 + expf(-para_func * x)) - scale_max * x * x * para_func / (1 + expf(-para_func * x)) / (1 + expf(-para_func * x));
 }
 
 __device__ float drip_upside(float x, float para_func, float tol_angle) {
@@ -206,18 +264,27 @@ __device__ float drip_upside(float x, float para_func, float tol_angle) {
 }
 
 __device__ float ddrip_upside(float x, float para_func, float tol_angle) {
+	float offset = 1.2;
 #if 0
 	return x >= 1 ? 2 * para_func * (x - 1) : 0; // hfunction_c
 #else
 	if (tol_angle > 0.5 * M_PI)
 	{
-		return 1 / (1 + expf(-(x - 1) * para_func)) / (1 + expf(-(x - 1) * para_func)) * para_func * expf(-(x - 1) * para_func);
+		return 1 / (1 + expf(-(x - offset) * para_func)) / (1 + expf(-(x - offset) * para_func)) * para_func * expf(-(x - offset) * para_func);
 	}
 	else
 	{
-		return -para_func * expf(para_func * (x + 1)) / (1 + expf(para_func * (x + 1))) / (1 + expf(para_func * (x + 1))); // sigmoid_c
+		return -para_func * expf(para_func * (x + offset)) / (1 + expf(para_func * (x + offset))) / (1 + expf(para_func * (x + offset))); // sigmoid_c
 	}
 #endif
+}
+
+__device__ float drip_upside_test(float x, float y, float para_func) {
+	return expf(-para_func * x * x - para_func * y * y);
+}
+
+__device__ float ddrip_upside_test(float x, float y, float x_der, float y_der, float para_func) {
+	return (-2 * para_func * x * x_der - 2 * para_func * y * y_der) * expf(-para_func * x * x - para_func * y * y);
 }
 
 void Grid::use_grid(void)
@@ -6647,8 +6714,6 @@ void grid::Grid::compute_spline_drip_constraint_dcoeff(void)
 	dc_test_host = nullptr;
 #endif
 
-	
-
 	cudaFree(dc_tmp);
 	dc_tmp = nullptr;
 	delete[] dc_host;
@@ -6663,44 +6728,12 @@ void grid::Grid::compute_spline_drip_constraint_test(void)
 	int modeid = _dripmode;
 	float func_drip_beta = drip_beta;
 	float func_drip_mu = drip_mu;
+	float func_drip_alpha = drip_alpha;
+	float func_drip_beta_scale = drip_beta_scale;
+	int func_drip_version = drip_version;
 
 	std::cout << "--[TEST] drip mode id: " << modeid << std::endl;
 	std::cout << "--[TEST] function para: " << func_drip_mu << ", " << func_drip_beta << std::endl;
-
-	// computation
-	int n = n_surf_points();
-
-	float* h_dev;
-	cudaMalloc(&h_dev, sizeof(float) * n_surf_points());
-	init_array(h_dev, float{ 0 }, n_surf_points());
-	cuda_error_check;
-
-	float* tilde_q1_dev;
-	cudaMalloc(&tilde_q1_dev, sizeof(float) * n_surf_points());
-	init_array(tilde_q1_dev, float{ 0 }, n_surf_points());
-	cuda_error_check;
-
-	float* tilde_q2_dev;
-	cudaMalloc(&tilde_q2_dev, sizeof(float) * n_surf_points());
-	init_array(tilde_q2_dev, float{ 0 }, n_surf_points());
-	cuda_error_check;
-
-	float* hinner_dev;
-	cudaMalloc(&hinner_dev, sizeof(float) * n_surf_points());
-	init_array(hinner_dev, float{ 0 }, n_surf_points());
-	cuda_error_check;
-
-	float* q1_dev;
-	cudaMalloc(&q1_dev, sizeof(float) * n_surf_points());
-	init_array(q1_dev, float{ 0 }, n_surf_points());
-	cuda_error_check;
-
-	float* q2_dev;
-	cudaMalloc(&q2_dev, sizeof(float) * n_surf_points());
-	init_array(q2_dev, float{ 0 }, n_surf_points());
-	cuda_error_check;
-
-
 
 	auto calc_node = [=] __device__(int node_id) {
 		float p[3];
@@ -6772,12 +6805,12 @@ void grid::Grid::compute_spline_drip_constraint_test(void)
 						Hessian[0][1] += gpu_cijk[index] * pNX[ir - i + m_iM] * pNY[is - j + m_iM] * NZ[it - k + m_iM];
 						Hessian[1][0] += gpu_cijk[index] * pNX[ir - i + m_iM] * pNY[is - j + m_iM] * NZ[it - k + m_iM];
 
-						//Hessian[2][2] += gpu_cijk[index] * NX[ir - i + m_iM] * NY[is - j + m_iM] * pPNZ[it - k + m_iM];
-						//Hessian[0][2] += gpu_cijk[index] * pNX[ir - i + m_iM] * NY[is - j + m_iM] * pNZ[it - k + m_iM];
-						//Hessian[1][2] += gpu_cijk[index] * NX[ir - i + m_iM] * pNY[is - j + m_iM] * pNZ[it - k + m_iM];
+						Hessian[2][2] += gpu_cijk[index] * NX[ir - i + m_iM] * NY[is - j + m_iM] * pPNZ[it - k + m_iM];
+						Hessian[0][2] += gpu_cijk[index] * pNX[ir - i + m_iM] * NY[is - j + m_iM] * pNZ[it - k + m_iM];
+						Hessian[1][2] += gpu_cijk[index] * NX[ir - i + m_iM] * pNY[is - j + m_iM] * pNZ[it - k + m_iM];
 
-						//Hessian[2][0] += gpu_cijk[index] * pNX[ir - i + m_iM] * NY[is - j + m_iM] * pNZ[it - k + m_iM];
-						//Hessian[2][1] += gpu_cijk[index] * NX[ir - i + m_iM] * pNY[is - j + m_iM] * pNZ[it - k + m_iM];
+						Hessian[2][0] += gpu_cijk[index] * pNX[ir - i + m_iM] * NY[is - j + m_iM] * pNZ[it - k + m_iM];
+						Hessian[2][1] += gpu_cijk[index] * NX[ir - i + m_iM] * pNY[is - j + m_iM] * pNZ[it - k + m_iM];
 					}
 				}
 			}
@@ -6797,16 +6830,14 @@ void grid::Grid::compute_spline_drip_constraint_test(void)
 		inner1 = Hessian[0][0];
 		inner2 = Hessian[0][0] * Hessian[1][1] - Hessian[0][1] * Hessian[1][0];
 
-		float h_ = drip_upside(hinner, func_drip_mu, angle_epsilon);
-		float tilde_q1 = appro_max1(inner1, func_drip_beta);
-		float tilde_q2 = appro_max2(inner2, func_drip_beta);
+		float gphi_x = 0.f, gphi_y = 0.f;
+		gphi_x = normal_vector[0] / normal_vector[2];
+		gphi_y = normal_vector[1] / normal_vector[2];
+		float g_ = drip_upside_test(gphi_x, gphi_y, func_drip_alpha);
 
-		h_dev[node_id] = h_;
-		tilde_q1_dev[node_id] = tilde_q1;
-		tilde_q2_dev[node_id] = tilde_q2;
-		hinner_dev[node_id] = hinner;
-		q1_dev[node_id] = Hessian[0][0];
-		q2_dev[node_id] = Hessian[0][0] * Hessian[1][1] - Hessian[0][1] * Hessian[1][0];
+		float h_ = drip_upside(hinner, func_drip_mu, angle_epsilon);
+		float tilde_q1 = appro_max111(inner1, func_drip_beta, func_drip_beta_scale);
+		float tilde_q2 = appro_max222(inner2, func_drip_beta, func_drip_beta_scale);
 
 		// [MARK] TOADD more enum
 		if (modeid == 6)       // exp_drip
@@ -6814,53 +6845,300 @@ void grid::Grid::compute_spline_drip_constraint_test(void)
 			if (normal_vector[2] < 0)
 			{
 				//val = h_ * tilde_q1 * tilde_q2;
-				val = h_ * tilde_q1 * tilde_q2;
+				if (func_drip_version == 1)
+				{
+					val = g_ * tilde_q1 * tilde_q2;
+				} 
+				else
+				{
+					val = h_ * tilde_q1 * tilde_q2;
+				}
 			}
 		}
 		else if (modeid == 7)       // exp2_drip
 		{
-			val = h_ * tilde_q1 * tilde_q2;
+			if (func_drip_version == 1)
+			{
+				val = g_ * tilde_q1 * tilde_q2;
+			}
+			else
+			{
+				val = h_ * tilde_q1 * tilde_q2;
+			}
+		}
+		return val;
+	};
+
+	size_t grid_dim, block_dim;
+	int n = n_surf_points();
+	make_kernel_param(&grid_dim, &block_dim, n, 256);
+	traverse << <grid_dim, block_dim >> > ((float*)_gbuf.drip_value, n, calc_node);
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+#ifdef ENABLE_MATLAB
+	float* host_spline_constrain = new float[n];
+	cudaMemcpy(host_spline_constrain, _gbuf.drip_value, sizeof(float) * n, cudaMemcpyDeviceToHost);
+	gpu_manager_t::pass_buf_to_matlab("drip_constraint_test", host_spline_constrain, n);
+	delete host_spline_constrain;
+	cuda_error_check;
+#endif
+
+#ifdef ENABLE_MATLAB
+	{
+		float* spline_surf_node_hessian[9];
+		for (int i = 0; i < 9; i++)
+		{
+			spline_surf_node_hessian[i] = new float[n];
+			cudaMemcpy(spline_surf_node_hessian[i], _gbuf.surface_hessian[i], sizeof(float) * _num_surface_points, cudaMemcpyDeviceToHost);
+			cuda_error_check;
+		}
+		gpu_manager_t::pass_buf_to_matlab("spline_surface_node_hessian_xx", spline_surf_node_hessian[0], n);
+		gpu_manager_t::pass_buf_to_matlab("spline_surface_node_hessian_yy", spline_surf_node_hessian[4], n);
+		gpu_manager_t::pass_buf_to_matlab("spline_surface_node_hessian_xy", spline_surf_node_hessian[1], n);
+		for (int i = 0; i < 9; i++) {
+			delete spline_surf_node_hessian[i];
+			spline_surf_node_hessian[i] = nullptr;
+		}
+	}
+#endif
+}
+
+void grid::Grid::compute_spline_drip_constraint_dcoeff_test(void)
+{
+	if (_layer != 0) return;
+
+	float* surface_direction = (float*)_gbuf.surface_normal_direction;
+
+	// MARK[TO CHECK] parallel_sum
+	float* tmp = (float*)getTempBuf(sizeof(float) * grid::Grid::spline_surface_node->size() / 100);
+	cuda_error_check;
+	float count = parallel_sum(_gbuf.surface_normal_direction, tmp, grid::Grid::spline_surface_node->size());
+	cudaDeviceSynchronize();
+	cuda_error_check;
+
+	float* normal_dirction = (float*)_gbuf.surface_normal_direction;
+	float direction;
+	if (count > 0)
+	{
+		direction = 1.0f;
+	}
+	else
+	{
+		direction = -1.0f;
+	}
+
+	float print_angle = _opt_print_angle;
+	float angle_epsilon = drip_angle;
+	int modeid = _dripmode;
+	float func_drip_beta = drip_beta;
+	float func_drip_mu = drip_mu;
+
+	float func_drip_alpha = drip_alpha;
+	float func_drip_beat_scale = drip_beta_scale;
+	int func_drip_version = drip_version;
+
+	std::cout << "--[TEST] drip mode id: " << modeid << std::endl;
+	std::cout << "--[TEST] function para: " << func_drip_mu << ", " << func_drip_beta << std::endl;
+
+	if (modeid == 6 || modeid == 7)
+	{
+		func_drip_beta = drip_beta;
+		func_drip_mu = drip_mu;
+	}
+	//else if (modeid == 2 || modeid == 3)
+	else
+	{
+		func_drip_beta = drip_beta;
+		func_drip_mu = drip_mu;
+	}
+
+	// computation
+	float* dc_tmp;
+	cudaMalloc(&dc_tmp, sizeof(float) * n_cijk());
+	init_array(dc_tmp, float{ 0 }, n_cijk());
+	cuda_error_check;
+
+	// for testing
+	float* dc_test;
+	cudaMalloc(&dc_test, sizeof(float) * n_cijk());
+	init_array(dc_test, float{ 0 }, n_cijk());
+	cuda_error_check;
+
+	auto calc_node_value = [=] __device__(int node_id)
+	{
+		float p[3] = { 0.f };
+
+		for (int i = 0; i < 3; i++)	p[i] = gpu_SurfacePoints[i][node_id];
+
+		float normal_vector[3] = { 0.f };
+		float normal_dcijk[3] = { 0.f };
+		float hessian_vector[9] = { 0.f };
+		float hessian_dcijk[9] = { 0.f };
+		float norm_dcijk = 0.f;
+		for (int i = 0; i < 3; i++) normal_vector[i] = gpu_surface_normal[i][node_id];
+		for (int i = 0; i < 9; i++) hessian_vector[i] = gpu_surface_hessian[i][node_id];
+
+		float normal_vector_norm = norm(normal_vector);
+
+		int i, j, k, ir, it, is, index;
+
+		float NX[m_iM] = { 0.f };
+		float pNX[m_iM] = { 0.f };
+		float pPNX[m_iM] = { 0.f };
+		float NY[m_iM] = { 0.f };
+		float pNY[m_iM] = { 0.f };
+		float pPNY[m_iM] = { 0.f };
+		float NZ[m_iM] = { 0.f };
+		float pNZ[m_iM] = { 0.f };
+		float pPNZ[m_iM] = { 0.f };
+
+		i = (int)((p[0] - gnBoundMin[0]) / gnstep[0]) + m_iM;
+		j = (int)((p[1] - gnBoundMin[1]) / gnstep[1]) + m_iM;
+		k = (int)((p[2] - gnBoundMin[2]) / gnstep[2]) + m_iM;
+
+		if ((i < m_iM) || (i > gnbasis[0]) || (j < m_iM) || (j > gnbasis[1]) || (k < m_iM) || (k > gnbasis[2]))
+		{
+			for (int ii = 0; ii < 9; ii++)
+			{
+				hessian_dcijk[ii] = 0.0f;
+			}
+		}
+		else
+		{
+			SplineBasisDeriX(p[0], 1, NX);   // 1 means the original function value
+			SplineBasisDeriX(p[0], 2, pNX);  // 2 means the first order derivative value
+			SplineBasisDeriX(p[0], 3, pPNX); // 3 means the second order derivative value
+
+			SplineBasisDeriY(p[1], 1, NY);
+			SplineBasisDeriY(p[1], 2, pNY);
+			SplineBasisDeriY(p[1], 3, pPNY); // 3 means the second order derivative value
+
+			SplineBasisDeriZ(p[2], 1, NZ);
+			SplineBasisDeriZ(p[2], 2, pNZ);
+			SplineBasisDeriZ(p[2], 3, pPNZ); // 3 means the second order derivative value
+
+			for (ir = i - m_iM; ir < i; ir++)
+			{
+				for (is = j - m_iM; is < j; is++)
+				{
+					for (it = k - m_iM; it < k; it++)
+					{
+						float val = 0.f;
+						float up = 0.f, down = 0.f;
+						float hinner = 0.f, hdinner = 0.f, h_ = 0.f, dh_ = 0.f;
+						float gphi_x = 0.f, gdphi_x = 0.f, gphi_y = 0.f, gdphi_y = 0.f, g_ = 0.f, dg_ = 0.f;
+
+						float inner1 = 0.f, inner2 = 0.f;
+						float dinner1 = 0.f, dinner2 = 0.f;
+						float tilde_q1 = 0.f, tilde_q2 = 0.f;
+						float dtilde_q1 = 0.f, dtilde_q2 = 0.f;
+						index = ir + is * gnbasis[0] + it * gnbasis[0] * gnbasis[1];
+
+						// for part.1 h_function
+						normal_dcijk[0] = direction * pNX[ir - i + m_iM] * NY[is - j + m_iM] * NZ[it - k + m_iM];
+						normal_dcijk[1] = direction * NX[ir - i + m_iM] * pNY[is - j + m_iM] * NZ[it - k + m_iM];
+						normal_dcijk[2] = direction * NX[ir - i + m_iM] * NY[is - j + m_iM] * pNZ[it - k + m_iM];
+						norm_dcijk = dot(normal_vector, normal_dcijk) / normal_vector_norm;
+
+						up = normal_dcijk[2] * normal_vector_norm - normal_vector[2] * norm_dcijk;
+						down = normal_vector_norm * normal_vector_norm * cosf(angle_epsilon);
+						hdinner = up / down;
+						hinner = normal_vector[2] / normal_vector_norm / cosf(angle_epsilon);
+
+						h_ = drip_upside(hinner, func_drip_mu, angle_epsilon);
+						dh_ = ddrip_upside(hinner, func_drip_mu, angle_epsilon);
+
+						// for part.1 Gauss function
+						gphi_x = normal_vector[0] / normal_vector[2];
+						gphi_y = normal_vector[1] / normal_vector[2];
+
+						gdphi_x = (normal_dcijk[0] * normal_vector[2] - normal_vector[0] * normal_dcijk[2]) / (normal_vector[2] * normal_vector[2]);
+						gdphi_x = (normal_dcijk[1] * normal_vector[2] - normal_vector[1] * normal_dcijk[2]) / (normal_vector[2] * normal_vector[2]);
+
+						g_ = drip_upside_test(gphi_x, gphi_y, func_drip_alpha);
+						dg_ = ddrip_upside_test(gphi_x, gphi_y, gdphi_x, gdphi_y, func_drip_alpha);
+						
+						// for part.2 tilde_q
+						hessian_dcijk[0] += pPNX[ir - i + m_iM] * NY[is - j + m_iM] * NZ[it - k + m_iM];
+						hessian_dcijk[4] += NX[ir - i + m_iM] * pPNY[is - j + m_iM] * NZ[it - k + m_iM];
+						hessian_dcijk[1] += pNX[ir - i + m_iM] * pNY[is - j + m_iM] * NZ[it - k + m_iM];
+						hessian_dcijk[3] += pNX[ir - i + m_iM] * pNY[is - j + m_iM] * NZ[it - k + m_iM];
+
+						inner1 = hessian_vector[0];
+						inner2 = hessian_vector[0] * hessian_vector[4] - hessian_vector[1] * hessian_vector[3];
+						dinner1 = hessian_dcijk[0];
+						dinner2 = hessian_dcijk[0] * hessian_vector[4] + hessian_vector[0] * hessian_dcijk[4] - hessian_dcijk[1] * hessian_vector[3] - hessian_vector[1] * hessian_dcijk[3];
+
+						tilde_q1 = appro_max111(inner1, func_drip_beta, func_drip_beat_scale);
+						tilde_q2 = appro_max222(inner2, func_drip_beta, func_drip_beat_scale);
+						dtilde_q1 = dappro_max111(inner1, func_drip_beta, func_drip_beat_scale);
+						dtilde_q2 = dappro_max222(inner2, func_drip_beta, func_drip_beat_scale);
+
+						// MARK heaviside_center_spline_der
+						if (modeid == 6)       // overhang_drip
+						{
+							if (normal_vector[2] < 0)
+							{
+								if (func_drip_version ==  1)
+								{
+									val = dg_ * hdinner * tilde_q1 * tilde_q2 + g_ * dtilde_q1 * dinner1 * tilde_q2 + g_ * tilde_q1 * dtilde_q2 * dinner2;
+								}
+								else
+								{
+									val = dh_ * hdinner * tilde_q1 * tilde_q2 + h_ * dtilde_q1 * dinner1 * tilde_q2 + h_ * tilde_q1 * dtilde_q2 * dinner2;
+								}
+							}
+						}
+						else if (modeid == 7)       // overhang2_drip
+						{
+							if (func_drip_version == 1)
+							{
+								val = dg_ * hdinner * tilde_q1 * tilde_q2 + g_ * dtilde_q1 * dinner1 * tilde_q2 + g_ * tilde_q1 * dtilde_q2 * dinner2;
+							}
+							else
+							{
+								val = dh_ * hdinner * tilde_q1 * tilde_q2 + h_ * dtilde_q1 * dinner1 * tilde_q2 + h_ * tilde_q1 * dtilde_q2 * dinner2;
+							}
+						}
+						dc_tmp[index] += val;
+					}
+				}
+			}
 		}
 		return;
 	};
 
-	size_t grid_dim, block_dim;	
+	size_t grid_dim, block_dim;
+	int n = grid::Grid::spline_surface_node->size();
 	make_kernel_param(&grid_dim, &block_dim, n, 256);
-	traverse_noret << <grid_dim, block_dim >> > (n, calc_node);
+	traverse_noret << <grid_dim, block_dim >> > (n, calc_node_value);
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
-	float* h_host = new float[n_surf_points()];
-	cudaMemcpy(h_host, h_dev, sizeof(float)* n_surf_points(), cudaMemcpyDeviceToHost);
+	float* dc_host = new float[n_cijk()];
+	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
 	cuda_error_check;
-
-	float* tilde_q1_host = new float[n_surf_points()];
-	cudaMemcpy(tilde_q1_host, tilde_q1_dev, sizeof(float)* n_surf_points(), cudaMemcpyDeviceToHost);
-	cuda_error_check;
-
-	float* tilde_q2_host = new float[n_surf_points()];
-	cudaMemcpy(tilde_q2_host, tilde_q2_dev, sizeof(float)* n_surf_points(), cudaMemcpyDeviceToHost);
-	cuda_error_check;
-
-	float* hinner_host = new float[n_surf_points()];
-	cudaMemcpy(hinner_host, hinner_dev, sizeof(float)* n_surf_points(), cudaMemcpyDeviceToHost);
-	cuda_error_check;
-
-	float* q1_host = new float[n_surf_points()];
-	cudaMemcpy(q1_host, q1_dev, sizeof(float)* n_surf_points(), cudaMemcpyDeviceToHost);
-	cuda_error_check;
-
-	float* q2_host = new float[n_surf_points()];
-	cudaMemcpy(q2_host, q2_dev, sizeof(float)* n_surf_points(), cudaMemcpyDeviceToHost);
+	init_array(_gbuf.dripc_sens, float{ 0 }, n_cijk());
+	cudaMemcpy(_gbuf.dripc_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
 #ifdef ENABLE_MATLAB
-	gpu_manager_t::pass_buf_to_matlab("h_", h_host, n_surf_points());
-	gpu_manager_t::pass_buf_to_matlab("tilde_q1", tilde_q1_host, n_surf_points());
-	gpu_manager_t::pass_buf_to_matlab("tilde_q2", tilde_q2_host, n_surf_points());
-	gpu_manager_t::pass_buf_to_matlab("hinner", hinner_host, n_surf_points());
-	gpu_manager_t::pass_buf_to_matlab("q1_", q1_host, n_surf_points());
-	gpu_manager_t::pass_buf_to_matlab("q2_", q2_host, n_surf_points());
+	//float* dc_test_host = new float[n_cijk()];
+	//cudaMemcpy(dc_test_host, dc_test, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
+	//cuda_error_check;
+	//gpu_manager_t::pass_buf_to_matlab("dripc_sens_test", dc_test_host, n_cijk());
+
+	gpu_manager_t::pass_buf_to_matlab("dripc_sens2_test", dc_host, n_cijk());
+
+	cudaFree(dc_test);
+	dc_test = nullptr;
+	//delete[] dc_test_host;
+	//dc_test_host = nullptr;
 #endif
 
+	cudaFree(dc_tmp);
+	dc_tmp = nullptr;
+	delete[] dc_host;
+	dc_host = nullptr;
 }
