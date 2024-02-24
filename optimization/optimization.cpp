@@ -4,6 +4,7 @@
 #include "binaryIO.h"
 #include "tictoc.h"
 #include <cstdlib>
+#include "mma_t.h"
 
 
 gpu_manager_t gpu_manager;
@@ -753,6 +754,255 @@ void optimization(void) {
 
 	// write volume record during optimization
 	bio::write_vector(grids.getPath("vrec"), volRecord);
+
+	// write time cost record during optimization
+	bio::write_vector(grids.getPath("trec"), tRecord);
+
+	// write last worst f and u
+	grids.writeSupportForce(grids.getPath("flast"));
+	grids.writeDisplacement(grids.getPath("ulast"));
+}
+
+void optimization_ss(void) {
+	// allocated total size
+	printf("[GPU] Total Mem :  %4.2lfGB\n", double(gpu_manager.size()) / 1024 / 1024 / 1024);
+
+	grids.testShell();
+
+#if 1
+	// MARK: ADD user-defined input	
+	//std::cout << "--TEST volume ratio: " << params.volume_ratio  << "..."<< std::endl;
+	initCoeffs(params.volume_ratio);
+	grids[0]->set_spline_knot_series();
+	grids.writeCoeff(grids.getPath("coeff"));
+	grids[0]->set_spline_knot_infoSymbol();
+	grids[0]->uploadCoeffsSymbol();
+	grids[0]->coeff2density();
+#elif 0	
+	initDensities(params.volume_ratio);
+#else
+	initDensities(1);
+	float Vgoal = 1;
+#endif
+
+	// DEBUG
+	setDEBUG(false);
+	grids[0]->eidmap2matlab("eidmap");
+	grids[0]->vidmap2matlab("vidmap");
+
+	grids[0]->randForce();
+
+#ifdef ENABLE_HEAVISIDE
+	float para_beta = 4;
+	float change_tol = 1e-3;
+	float change[2] = { 0.f };
+	//grids[0]->rho2matlab("rhopj0");
+	//projectDensities(para_beta);
+
+	//grids[0]->initrho2matlab("rhoinit");
+	//grids[0]->rho2matlab("rhopj");
+#endif
+
+	//float Vgoal = 1;
+	float Vgoal = params.volume_ratio;
+
+	int itn = 0;
+
+	snippet::converge_criteria stop_check(1, 2, 5e-3);
+
+	std::vector<double> cRecord, volRecord, ssRecord, dripRecord;
+	double* con_value;
+
+	std::vector<double> tRecord;
+
+	double Vc = Vgoal - params.volume_ratio;
+
+	int n_constraint = 1;
+
+#ifdef ENABLE_SELFSUPPORT
+	n_constraint = 3;
+#endif
+	con_value = new double[n_constraint];
+
+	// MMA
+	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
+	mma.init(params.min_cijk, 1);
+	float sensScale = 1e0;
+	float volScale = 1e3;
+	float SSScale = 1e-1;
+	float dripScale = 1e2;
+	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
+	gv::gVector v(1, volScale * (1 - params.volume_ratio));
+
+	gv::gVector gval(n_constraint);
+	std::vector<gv::gVector> gdiffval(n_constraint);
+	std::vector<float*> gdiff(n_constraint);
+	for (int i = 0; i < n_constraint; i++) {
+		gdiffval[i] = gv::gVector(grids[0]->n_cijk());
+		gdiff[i] = gdiffval[i].data();
+	}
+
+	while (itn++ < 100) {
+		printf("\n* \033[32mITER %d \033[0m*\n", itn);
+
+		Vgoal *= (1 - params.volume_decrease);
+
+		Vc = Vgoal - params.volume_ratio;
+
+		if (Vgoal < params.volume_ratio) Vgoal = params.volume_ratio;
+
+		grids[0]->coeff2matlab("coeff_2");
+		// set spline_coeff from mma (cpu2gpu)
+		TestSuit::setCoeff(mma.get_x().data());
+		// update coeff 2 density
+		grids[0]->coeff2matlab("coeff_1");
+		grids[0]->coeff2density();
+
+#ifdef ENABLE_HEAVISIDE
+		projectDensities(para_beta);
+		grids[0]->initrho2matlab("rhoinit");
+		grids[0]->rho2matlab("rhopj");
+#endif
+
+		// compute volume 
+		double vol = grids[0]->volumeRatio();
+		v[0] = volScale * (vol - params.volume_ratio);
+		con_value[0] = vol;
+
+		double ss_value = 0.0;
+		double drip_value = 0.0;
+
+		// update numeric stencil after density changed
+		update_stencil();
+
+		// solve worst displacement by modified power method
+		auto t0 = tictoc::getTag();
+#if 1
+		double c_worst = modifiedPM();
+#else
+		double c_worst = MGPSOR();
+#endif
+		auto t1 = tictoc::getTag();
+		tRecord.emplace_back(tictoc::Duration<tictoc::ms>(t0, t1));
+
+		grids.writeSupportForce(grids.getPath(snippet::formated("iter%d_fs", itn)));
+
+#ifdef ENABLE_SELFSUPPORT
+		if (grids.areALLCoeffsEqual())
+		{
+			std::cout << "\033[34m-- [Same Coeff cannot extra surface points] --\033[0m" << std::endl;
+			initSSCSens(float{ 0.0 });
+			initDripCSens(float{ 0.0 });
+			ss_value = 1.0;
+			drip_value = 0.0;
+		}
+		//else if(itn < 20)
+		//{
+		//	std::cout << "\033[34m-- [Optimization of Coeffs without self-supporting] --\033[0m" << std::endl;
+		//	initSSCSens(float{ 0.0 });
+		//	initDripCSens(float{ 0.0 });
+		//	ss_value = 1.0;
+		//	drip_value = 0.0;
+		//}
+		else
+		{
+			if (itn > 80)
+			{
+				SSScale = 1e1;
+				dripScale = 1e4;
+			}
+			else if (itn > 30)
+			{
+				SSScale = 1e0;
+				dripScale = 1e3;
+
+			}
+			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;
+			deal_surface_points(para_beta);
+			ss_value = grids[0]->global_selfsupp_constraint();
+			std::cout << "--[TEST] SS value : " << ss_value << std::endl;
+			drip_value = grids[0]->global_drip_constraint();
+			std::cout << "--[TEST] DRIP value : " << drip_value << std::endl;
+			//drip_value = 1.0;
+		}
+
+		con_value[1] = ss_value;
+		con_value[2] = drip_value;
+#endif
+		printf("-- c_worst = %6.4e  v = %4.3lf ", c_worst, vol);
+		if (isnan(c_worst) || abs(c_worst) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
+		cRecord.emplace_back(c_worst); volRecord.emplace_back(Vgoal);  ssRecord.emplace_back(ss_value); dripRecord.emplace_back(drip_value);
+		if (stop_check.update(c_worst, con_value) && Vgoal <= params.volume_ratio) break;
+		grids.log(itn);
+		// compute adjoint variables
+		//findAdjointVariabls();
+
+		// compute sensitivity
+#ifdef ENABLE_HEAVISIDE
+		computeSensitivity2(para_beta);
+#else
+		computeSensitivity();
+#endif
+
+		TestSuit::scaleVector(grids[0]->getCSens(), grids[0]->n_cijk(), sensScale);
+		TestSuit::scaleVector(grids[0]->getVolCSens(), grids[0]->n_cijk(), volScale);
+		TestSuit::scaleVector(grids[0]->getSSCSens(), grids[0]->n_cijk(), SSScale);
+		TestSuit::scaleVector(grids[0]->getDripCSens(), grids[0]->n_cijk(), dripScale);
+
+		gpu_manager_t::pass_dev_buf_to_matlab("csensscale", grids[0]->getCSens(), grids[0]->n_cijk());
+		gpu_manager_t::pass_dev_buf_to_matlab("volcsensscale", grids[0]->getVolCSens(), grids[0]->n_cijk());
+		gpu_manager_t::pass_dev_buf_to_matlab("sscsensscale", grids[0]->getSSCSens(), grids[0]->n_cijk());
+		gpu_manager_t::pass_dev_buf_to_matlab("dripcsensscale", grids[0]->getDripCSens(), grids[0]->n_cijk());
+
+		gdiff[0] = grids[0]->getVolCSens();
+		gval[0] = volScale * (vol - params.volume_ratio);                 // corrected !!!
+		std::cout << "-- TEST gv[0] : " << gval[0] << std::endl;
+
+#ifdef ENABLE_SELFSUPPORT
+		gdiff[1] = grids[0]->getSSCSens();
+		gval[1] = SSScale * (ss_value - 1);
+		std::cout << "-- TEST gv[1] : " << gval[1] << std::endl;
+		gdiff[2] = grids[0]->getDripCSens();
+		gval[2] = dripScale * (drip_value);
+		std::cout << "-- TEST gv[2] : " << gval[2] << std::endl;
+#endif
+		std::cout << "-- TEST Heaviside beta : " << para_beta << std::endl;
+
+		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
+
+#ifdef ENABLE_HEAVISIDE
+		if (itn % 10 == 0 && itn > 2 && para_beta < 32)
+		{
+			para_beta = para_beta * 2;
+		}
+#endif
+		//// update density
+		//updateDensities(Vgoal);
+
+		// DEBUG
+		if (itn % 5 == 0) {
+			grids.writeDensity(grids.getPath("out.vdb"));
+			grids.writeSensitivity(grids.getPath("sens.vdb"));
+		}
+
+		bio::write_vector(grids.getPath("crec_iter"), cRecord);
+		bio::write_vector(grids.getPath("vrec_iter"), volRecord);
+		bio::write_vector(grids.getPath("ssrec_iter"), ssRecord);
+		bio::write_vector(grids.getPath("driprec_iter"), dripRecord);
+	}
+
+	printf("\n=   finished   =\n");
+
+	// write result density field
+	grids.writeDensity(grids.getPath("out.vdb"));
+
+	// write worst compliance record during optimization
+	bio::write_vector(grids.getPath("cworst"), cRecord);
+
+	// write volume record during optimization
+	bio::write_vector(grids.getPath("vrec"), volRecord);
+	bio::write_vector(grids.getPath("ssrec"), ssRecord);
+	bio::write_vector(grids.getPath("driprec"), dripRecord);
 
 	// write time cost record during optimization
 	bio::write_vector(grids.getPath("trec"), tRecord);

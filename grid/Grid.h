@@ -364,7 +364,7 @@ namespace grid {
 
 		float drip_alpha = 4;
 		int drip_version = 0; // 1 : \phi_x \ phi_z     else : \phi_z \ norm()
-		float drip_beta_scale = 5;
+		float drip_beta_scale = 10;
 
 		float _min_coeff = 0.f;
 		float _max_coeff = 1.0f;

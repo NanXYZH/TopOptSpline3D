@@ -7,6 +7,7 @@
 #include "Grid.h"
 #include <filesystem>
 #include "MeshDefinition.h"
+#include "test_utils.h"
 //#include "CGALDefinition.h"
 
 extern grid::HierarchyGrid grids;
@@ -97,6 +98,8 @@ float updateCoeff(float Vgoal);
 void projectDensities(float beta);
 
 void optimization(void);
+
+void optimization_ss(void);
 
 grid::HierarchyGrid& getGrids(void);
 

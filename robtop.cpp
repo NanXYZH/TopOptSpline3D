@@ -56,6 +56,6 @@ int main(int argc, char** argv)
 
 	TestSuit::testMain(FLAGS_testname);
 
-	optimization();
+	optimization_ss();
 }
 
