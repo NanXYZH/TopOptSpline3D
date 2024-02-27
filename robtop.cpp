@@ -26,10 +26,7 @@ int main(int argc, char** argv)
 
 	//cgalTest();
 	selfTest();
-
-
 	parser.parse(argc, argv);
-
 
 	setParameters(
 		FLAGS_volume_ratio, FLAGS_vol_reduction, FLAGS_design_step, FLAGS_filter_radius, FLAGS_damp_ratio, FLAGS_power_penalty, FLAGS_min_density,
@@ -56,6 +53,6 @@ int main(int argc, char** argv)
 
 	TestSuit::testMain(FLAGS_testname);
 
-	optimization_ss();
+	optimization();
 }
 

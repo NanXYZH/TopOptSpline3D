@@ -3040,9 +3040,9 @@ size_t grid::Grid::build(
 		for (int i = 0; i < 3; i++)
 		{
 			_gbuf.surface_normal[i] = (float*)gm.add_buf(_name + " SurfaceNormal " + std::to_string(i), sizeof(float) * _num_surface_points);
-			_gbuf.surface_normal_dc[i] = (float*)gm.add_buf(_name + " SurfaceNormaldc " + std::to_string(i), sizeof(float) * _num_surface_points);
+			_gbuf.surface_normal_dc[i] = (float*)gm.add_buf(_name + " SurfaceNormaldc " + std::to_string(i), sizeof(float) * n_im * n_in * n_il);
 			gbuf_size += sizeof(float) * _num_surface_points;
-			gbuf_size += sizeof(float) * _num_surface_points;
+			gbuf_size += sizeof(float) * n_im * n_in * n_il;
 		} 
 
 		for (int i = 0; i < 9; i++)
@@ -3050,8 +3050,8 @@ size_t grid::Grid::build(
 			_gbuf.surface_hessian[i] = (float*)gm.add_buf(_name + " SurfaceHessian " + std::to_string(i), sizeof(float) * _num_surface_points);
 			gbuf_size += sizeof(float) * _num_surface_points;
 		}
-		_gbuf.surface_normal_norm_dc = (float*)gm.add_buf(_name + " SurfaceNormalnormdc ", sizeof(float) * _num_surface_points);
-		gbuf_size += sizeof(float) * _num_surface_points;
+		_gbuf.surface_normal_norm_dc = (float*)gm.add_buf(_name + " SurfaceNormalnormdc ", sizeof(float) * n_im * n_in * n_il);
+		gbuf_size += sizeof(float) * n_im * n_in * n_il;
 		
 		_gbuf.surface_normal_direction = (float*)gm.add_buf(_name + " SurfaceNormaldirection ", sizeof(float) * _num_surface_points);
 		gbuf_size += sizeof(float) * _num_surface_points;
@@ -4175,7 +4175,14 @@ void grid::Grid::scale_spline_selfsupp_constraint_dcoeff(void)
 		count = count_surface_points();
 	}
 	//std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
-	scaleVector(getSSCSens(), spline_surface_node->size(), 1 / count);
+	if (count == 0)
+	{
+		scaleVector(getSSCSens(), n_cijk(), 0);
+	} 
+	else
+	{
+		scaleVector(getSSCSens(), n_cijk(), 1 / count);
+	}	
 	SScsens2matlab("ssc_sens3");
 }
 
@@ -4188,6 +4195,13 @@ void grid::Grid::scale_spline_drip_constraint_dcoeff(void)
 		count = count_surface_points();
 	}
 	std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
-	scaleVector(getDripCSens(), spline_surface_node->size(), 1 / count);
+	if (count = 0)
+	{
+		scaleVector(getDripCSens(), n_cijk(), 0);
+	} 
+	else
+	{
+		scaleVector(getDripCSens(), n_cijk(), 1 / count);
+	}	
 	SScsens2matlab("dripc_sens3");
 }

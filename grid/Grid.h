@@ -531,7 +531,6 @@ namespace grid {
 		float* getCoeff(void) { return _gbuf.coeffs;  }
 
 		float* getSens(void) { return _gbuf.g_sens; }  // de/drho
-
 		float* getCSens(void) { return _gbuf.c_sens; } // de/dc
 
 		float* getVolSens(void) { return _gbuf.vol_sens; } // dvol/drho

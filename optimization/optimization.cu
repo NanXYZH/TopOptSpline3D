@@ -236,6 +236,7 @@ void computeSensitivity(void) {
 
 	// DEBUG
 	grids[0]->csens2matlab("csensfilt2");
+	grids[0]->Volcsens2matlab("volcsensfilt2");
 
 }
 
@@ -277,7 +278,6 @@ void computeSensitivity2(float beta) {
 	cudaDeviceSynchronize();
 	cuda_error_check;
 	grids[0]->Volsens2matlab("volsensproj");
-
 #endif
 
 	// filter sensitivity
@@ -299,7 +299,7 @@ void computeSensitivity2(float beta) {
 	// energy: rho_diff 2 coeff_diff
 	grids[0]->ddensity2dcoeff_update();
 
-	// vol: rho_diff 2 coeff_diff
+	// vol: vol_diff 2 coeff_diff
 	grids[0]->dvol2dcoeff();
 
 	cudaMemGetInfo(&free_mem, &total_mem);

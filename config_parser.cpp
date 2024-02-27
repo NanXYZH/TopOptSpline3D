@@ -454,6 +454,7 @@ void config_parser_t::parse_benchmark_configuration(const std::string& filename)
 		}
 		std::cout << counter << " area" << std::endl;
 	}
+
 }
 
 void config_parser_t::readMesh(const std::string& meshfile, std::vector<float>& coords, std::vector<int>& trfaces, Mesh& inputmesh)

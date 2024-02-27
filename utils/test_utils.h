@@ -38,6 +38,8 @@ public:
 
 	static void testOrdinarySplineTopoptMMA(void);
 
+	static void testRobustSplineMMA(void);
+
 	static void testDifferentEigenSolvers(void);
 
 	static void testDifferentInitForce(void);

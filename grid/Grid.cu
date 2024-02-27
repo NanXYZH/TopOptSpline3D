@@ -3360,6 +3360,10 @@ __global__ void coeff2density_kernel(int nebitword, float mindensity, gBitSAT<un
 
 void Grid::coeff2density(void)
 {
+	size_t free_mem, total_mem;
+	cudaMemGetInfo(&free_mem, &total_mem);
+	std::cout << "Free Memory: " << free_mem / (1024 * 1024) << " MB  |  Total Memory: " << total_mem / (1024 * 1024) << " MB" << std::endl;
+
 	if (_layer != 0) return;
 	// computation
 	float* cijk_value = _gbuf.coeffs;
@@ -3709,6 +3713,7 @@ void Grid::ddensity2dcoeff_update(void)
 						else
 						{
 							val = /*Dirac(rholist[eid]) * */rho_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							//val = rho_diff[eid];
 							dc_tmp[index] += val;
 						}
 						count4coeff++;
@@ -3819,6 +3824,7 @@ void Grid::dvol2dcoeff(void)
 						else
 						{
 							val = vol_diff[eid] * pNX[ir - i + gorder[0]] * pNY[is - j + gorder[0]] * pNZ[it - k + gorder[0]];
+							//val = vol_diff[eid];
 							dc_tmp[index] += val;
 						}
 						count4coeff++;
@@ -3838,7 +3844,7 @@ void Grid::dvol2dcoeff(void)
 	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
 	cuda_error_check;
 	// upload to _gbuf.c_sens
-	init_array(_gbuf.volc_sens, float{ 1 }, n_cijk());
+	init_array(_gbuf.volc_sens, float{ 0.0 }, n_cijk());
 	cudaMemcpy(_gbuf.volc_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
@@ -4936,12 +4942,14 @@ void Grid::init_volcsens(double ratio)
 
 void Grid::init_sscsens(double sens)
 {
-	init_array(_gbuf.ssc_sens, float(sens), n_surf_points());
+	init_array(_gbuf.ssc_sens, float(sens), n_cijk());
+	cuda_error_check;
 }
 
 void Grid::init_dripcsens(double sens)
 {
-	init_array(_gbuf.dripc_sens, float(sens), n_surf_points());
+	init_array(_gbuf.dripc_sens, float(sens), n_cijk());
+	cuda_error_check;
 }
 
 //void TestSuit::setDensity(float* newrho)
@@ -5595,7 +5603,7 @@ void grid::Grid::compute_spline_surface_point_normal(void)
 		for (int i = 0; i < 3; i++)
 		{
 			spline_surf_node_normal[i] = new float[n];
-			cudaMemcpy(spline_surf_node_normal[i], _gbuf.surface_normal[i], sizeof(float)* _num_surface_points, cudaMemcpyDeviceToHost);
+			cudaMemcpy(spline_surf_node_normal[i], _gbuf.surface_normal[i], sizeof(float)* n, cudaMemcpyDeviceToHost);
 			cuda_error_check;
 		}
 		gpu_manager_t::pass_buf_to_matlab("spline_surface_node_normal_x", spline_surf_node_normal[0], n);
@@ -5996,8 +6004,8 @@ float grid::Grid::count_surface_points(void)
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
-	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n / 100);
-	float count = parallel_sum(_gbuf.surface_point_buf, sum, n);
+	float* tmp = (float*)grid::Grid::getTempBuf(sizeof(float) * n / 100);
+	float count = parallel_sum(_gbuf.surface_point_buf, tmp, n);
 	cudaDeviceSynchronize();
 	cuda_error_check;
 	return count;
@@ -6103,28 +6111,35 @@ float grid::Grid::global_selfsupp_constraint(void)
 		count = count_surface_points();
 	}
 
-	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n_surf_points() / 100);
-	float ss_sum = parallel_sum(_gbuf.ss_value, sum, n_surf_points());
+	float* tmp = (float*)grid::Grid::getTempBuf(sizeof(float) * n_surf_points() / 100);
+	float ss_sum = parallel_sum(_gbuf.ss_value, tmp, n_surf_points());
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
 	std::cout << "--[TEST] total  of SS constraints : " << ss_sum << std::endl;
 	std::cout << "--[TEST] number of SS constraints : " << count << std::endl;
 
-	if (modeid == 0 || modeid == 1)
+	if (count == 0)
 	{
-		func_para = p_norm;
-		val = pow(ss_sum / count, 1 / func_para) - 1;
+		val = 0;
 	}
-	else if (modeid == 2 || modeid == 3)
+	else
 	{
-		func_para = hfunction_c;
-		val = ss_sum / count;
-	}
-	else if (modeid == 4 || modeid == 5)
-	{
-		func_para = sigmoid_c;
-		val = ss_sum / count;
+		if (modeid == 0 || modeid == 1)
+		{
+			func_para = p_norm;
+			val = pow(ss_sum / count, 1 / func_para) - 1;
+		}
+		else if (modeid == 2 || modeid == 3)
+		{
+			func_para = hfunction_c;
+			val = ss_sum / count;
+		}
+		else if (modeid == 4 || modeid == 5)
+		{
+			func_para = sigmoid_c;
+			val = ss_sum / count;
+		}
 	}
 	return val;
 }
@@ -6291,7 +6306,7 @@ void grid::Grid::compute_spline_selfsupp_constraint_dcoeff(void)
 	float* dc_host = new float[n_cijk()];
 	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
 	cuda_error_check;
-	init_array(_gbuf.ssc_sens, float{ 0 }, n_cijk());
+	init_array(_gbuf.ssc_sens, float{ 0.0 }, n_cijk());
 	cudaMemcpy(_gbuf.ssc_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
@@ -6453,7 +6468,7 @@ void grid::Grid::compute_spline_drip_constraint(void)
 		for (int i = 0; i < 9; i++)
 		{
 			spline_surf_node_hessian[i] = new float[n];
-			cudaMemcpy(spline_surf_node_hessian[i], _gbuf.surface_hessian[i], sizeof(float) * _num_surface_points, cudaMemcpyDeviceToHost);
+			cudaMemcpy(spline_surf_node_hessian[i], _gbuf.surface_hessian[i], sizeof(float) * n, cudaMemcpyDeviceToHost);
 			cuda_error_check;
 		}
 		gpu_manager_t::pass_buf_to_matlab("spline_surface_node_hessian_xx", spline_surf_node_hessian[0], n);
@@ -6482,30 +6497,37 @@ float grid::Grid::global_drip_constraint(void)
 
 	std::cout << "--[TEST] number of DRIP constraints : " << count << std::endl;
 
-	float* sum = (float*)grid::Grid::getTempBuf(sizeof(float) * n_surf_points() / 100);
-	float drip_sum = parallel_sum(_gbuf.drip_value, sum, n_surf_points());
+	float* tmp = (float*)grid::Grid::getTempBuf(sizeof(float) * n_surf_points() / 100);
+	float drip_sum = parallel_sum(_gbuf.drip_value, tmp, n_surf_points());
 	cudaDeviceSynchronize();
 	cuda_error_check;
 
-	if (modeid == 0 || modeid == 1)
+	if (count == 0)
 	{
-		func_para = p_norm;
-		val = pow(drip_sum / count, 1 / func_para) - 1;
-	}
-	else if (modeid == 2 || modeid == 3)
+		val = 0;
+	} 
+	else
 	{
-		func_para = hfunction_c;
-		val = drip_sum / count;
-	}
-	else if (modeid == 4 || modeid == 5)
-	{
-		func_para = sigmoid_c;
-		val = drip_sum / count;
-	}
-	else if (modeid == 6 || modeid == 7)
-	{
-		func_para = drip_beta;
-		val = drip_sum / count;
+		if (modeid == 0 || modeid == 1)
+		{
+			func_para = p_norm;
+			val = pow(drip_sum / count, 1 / func_para) - 1;
+		}
+		else if (modeid == 2 || modeid == 3)
+		{
+			func_para = hfunction_c;
+			val = drip_sum / count;
+		}
+		else if (modeid == 4 || modeid == 5)
+		{
+			func_para = sigmoid_c;
+			val = drip_sum / count;
+		}
+		else if (modeid == 6 || modeid == 7)
+		{
+			func_para = drip_beta;
+			val = drip_sum / count;
+		}
 	}
 	return val;
 }
@@ -6519,7 +6541,6 @@ void grid::Grid::compute_spline_drip_constraint_dcoeff(void)
 
 	// MARK[TO CHECK] parallel_sum
 	float* tmp = (float*)getTempBuf(sizeof(float) * grid::Grid::spline_surface_node->size() / 100);
-	cuda_error_check;
 	float count = parallel_sum(_gbuf.surface_normal_direction, tmp, grid::Grid::spline_surface_node->size());
 	cudaDeviceSynchronize();
 	cuda_error_check;
@@ -6696,7 +6717,7 @@ void grid::Grid::compute_spline_drip_constraint_dcoeff(void)
 	float* dc_host = new float[n_cijk()];
 	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
 	cuda_error_check;
-	init_array(_gbuf.dripc_sens, float{ 0 }, n_cijk());
+	init_array(_gbuf.dripc_sens, float{ 0.0 }, n_cijk());
 	cudaMemcpy(_gbuf.dripc_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
@@ -6912,7 +6933,6 @@ void grid::Grid::compute_spline_drip_constraint_dcoeff_test(void)
 
 	// MARK[TO CHECK] parallel_sum
 	float* tmp = (float*)getTempBuf(sizeof(float) * grid::Grid::spline_surface_node->size() / 100);
-	cuda_error_check;
 	float count = parallel_sum(_gbuf.surface_normal_direction, tmp, grid::Grid::spline_surface_node->size());
 	cudaDeviceSynchronize();
 	cuda_error_check;
@@ -7119,22 +7139,14 @@ void grid::Grid::compute_spline_drip_constraint_dcoeff_test(void)
 	float* dc_host = new float[n_cijk()];
 	cudaMemcpy(dc_host, dc_tmp, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
 	cuda_error_check;
-	init_array(_gbuf.dripc_sens, float{ 0 }, n_cijk());
+	init_array(_gbuf.dripc_sens, float{ 0.0 }, n_cijk());
 	cudaMemcpy(_gbuf.dripc_sens, dc_host, n_cijk() * sizeof(float), cudaMemcpyHostToDevice);
 	cuda_error_check;
 
 #ifdef ENABLE_MATLAB
-	//float* dc_test_host = new float[n_cijk()];
-	//cudaMemcpy(dc_test_host, dc_test, sizeof(float) * n_cijk(), cudaMemcpyDeviceToHost);
-	//cuda_error_check;
-	//gpu_manager_t::pass_buf_to_matlab("dripc_sens_test", dc_test_host, n_cijk());
-
 	gpu_manager_t::pass_buf_to_matlab("dripc_sens2_test", dc_host, n_cijk());
-
 	cudaFree(dc_test);
 	dc_test = nullptr;
-	//delete[] dc_test_host;
-	//dc_test_host = nullptr;
 #endif
 
 	cudaFree(dc_tmp);
