@@ -1283,8 +1283,8 @@ void TestSuit::testRobustSplineMMA(void)
 	mma.init(params.min_cijk, 1);
 	float sensScale = 1e0;
 	float volScale = 1e3;
-	float SSScale = 1e-1;
-	float dripScale = 1e2;
+	float SSScale = 1e0;
+	float dripScale = 1e-1;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -1296,7 +1296,7 @@ void TestSuit::testRobustSplineMMA(void)
 		gdiff[i] = gdiffval[i].data();
 	}
 
-	while (itn++ < 100) {
+	while (itn++ < 200) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
 
 		Vgoal *= (1 - params.volume_decrease);
@@ -1356,15 +1356,15 @@ void TestSuit::testRobustSplineMMA(void)
 		}
 		else
 		{
-			if (itn > 80)
+			if (itn > 100)
 			{
 				SSScale = 1e1;
-				dripScale = 1e4;
+				dripScale = 1e2;
 			}
-			else if (itn > 30)
+			else if (itn > 50)
 			{
-				SSScale = 1e0;
-				dripScale = 1e3;
+				SSScale = 1e1;
+				dripScale = 1e1;
 
 			}
 			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;
@@ -1422,7 +1422,7 @@ void TestSuit::testRobustSplineMMA(void)
 		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
 
 #ifdef ENABLE_HEAVISIDE
-		if (itn % 10 == 0 && itn > 2 && para_beta < 32)
+		if (itn % 30 == 0 && itn > 2 && para_beta < 16)
 		{
 			para_beta = para_beta * 2;
 		}

@@ -1,0 +1,13 @@
+{
+    "model":"bunny.obj",
+    "loadarea":[
+        {
+            "type":"sphere",
+            "center":[0,0,8],
+            "radius":1000
+        }
+    ],
+    "fixedarea":[ ],
+    "force":[
+    ]
+}
