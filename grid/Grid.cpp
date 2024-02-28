@@ -4189,13 +4189,13 @@ void grid::Grid::scale_spline_selfsupp_constraint_dcoeff(void)
 void grid::Grid::scale_spline_drip_constraint_dcoeff(void)
 {
 	float count = spline_surface_node->size();
-	int modeid = _ssmode;
+	int modeid = _dripmode;
 	if (modeid % 2 == 0) // only nz < 0
 	{
 		count = count_surface_points();
 	}
 	std::cout << " Surface points in constraint: " << count << " (" << n_surf_points() << ") " << std::endl;
-	if (count = 0)
+	if (count == 0)
 	{
 		scaleVector(getDripCSens(), n_cijk(), 0);
 	} 
@@ -4203,5 +4203,5 @@ void grid::Grid::scale_spline_drip_constraint_dcoeff(void)
 	{
 		scaleVector(getDripCSens(), n_cijk(), 1 / count);
 	}	
-	SScsens2matlab("dripc_sens3");
+	Dripcsens2matlab("dripc_sens3");
 }
