@@ -1262,7 +1262,7 @@ void TestSuit::testRobustSplineMMA(void)
 
 	int itn = 0;
 
-	snippet::converge_criteria stop_check(1, 2, 5e-3);
+	snippet::converge_criteria stop_check(1, 5, 5e-3);
 
 	std::vector<double> cRecord, volRecord, ssRecord, dripRecord;
 	double* con_value;
@@ -1281,10 +1281,10 @@ void TestSuit::testRobustSplineMMA(void)
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float sensScale = 1e0;
+	float sensScale = 1e5;
 	float volScale = 1e3;
-	float SSScale = 1e0;
-	float dripScale = 1e-1;
+	float SSScale = 1e2;
+	float dripScale = 1e5;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
 
@@ -1356,15 +1356,25 @@ void TestSuit::testRobustSplineMMA(void)
 		}
 		else
 		{
-			if (itn > 100)
+			if (itn > 160)
 			{
-				SSScale = 1e1;
-				dripScale = 1e2;
+				SSScale = 1e3;
+				dripScale = 1e10;
 			}
-			else if (itn > 50)
+			else if (itn > 120)
 			{
-				SSScale = 1e1;
-				dripScale = 1e1;
+				SSScale = 1e3;
+				dripScale = 1e9;
+			}
+			else if (itn > 80)
+			{
+				SSScale = 1e3;
+				dripScale = 1e8;
+			}
+			else if (itn > 40)
+			{
+				SSScale = 1e3;
+				dripScale = 1e7;
 
 			}
 			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;
@@ -1422,7 +1432,7 @@ void TestSuit::testRobustSplineMMA(void)
 		mma.update(grids[0]->getCSens(), gdiff.data(), gval.data());
 
 #ifdef ENABLE_HEAVISIDE
-		if (itn % 30 == 0 && itn > 2 && para_beta < 16)
+		if (itn % 30 == 0 && itn > 2 && para_beta < 8)
 		{
 			para_beta = para_beta * 2;
 		}
