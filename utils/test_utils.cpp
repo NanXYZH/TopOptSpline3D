@@ -1262,7 +1262,7 @@ void TestSuit::testRobustSplineMMA(void)
 
 	int itn = 0;
 
-	snippet::converge_criteria stop_check(1, 5, 5e-3);
+	snippet::converge_criteria stop_check(1, 5, 1e-4);
 
 	std::vector<double> cRecord, volRecord, ssRecord, dripRecord;
 	double* con_value;
@@ -1281,9 +1281,9 @@ void TestSuit::testRobustSplineMMA(void)
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float sensScale = 1e5;
+	float sensScale = 1e6;
 	float volScale = 1e3;
-	float SSScale = 1e2;
+	float SSScale = 1e3;
 	float dripScale = 1e5;
 	gv::gVector dv(grids[0]->n_cijk(), volScale / grids[0]->n_cijk());
 	gv::gVector v(1, volScale * (1 - params.volume_ratio));
@@ -1296,7 +1296,7 @@ void TestSuit::testRobustSplineMMA(void)
 		gdiff[i] = gdiffval[i].data();
 	}
 
-	while (itn++ < 200) {
+	while (itn++ < 400) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
 
 		Vgoal *= (1 - params.volume_decrease);
@@ -1358,22 +1358,27 @@ void TestSuit::testRobustSplineMMA(void)
 		{
 			if (itn > 160)
 			{
-				SSScale = 1e3;
-				dripScale = 1e10;
+				sensScale = 1e7;
+				SSScale = 1e4;
+				dripScale = 1e8;
 			}
 			else if (itn > 120)
 			{
-				SSScale = 1e3;
-				dripScale = 1e9;
+				sensScale = 1e7;
+				SSScale = 1e4;
+				dripScale = 1e8;
 			}
 			else if (itn > 80)
 			{
-				SSScale = 1e3;
+				sensScale = 1e7;
+				SSScale = 1e4;
 				dripScale = 1e8;
 			}
 			else if (itn > 40)
 			{
-				SSScale = 1e3;
+				sensScale = 1e7;
+				volScale = volScale;
+				SSScale = 1e4;
 				dripScale = 1e7;
 
 			}

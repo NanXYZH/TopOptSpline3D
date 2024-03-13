@@ -360,7 +360,7 @@ namespace grid {
 
 		float drip_mu = 32;
 
-		float drip_angle = 170.0 / 180.0 * M_PI;
+		float drip_angle = 160.0 / 180.0 * M_PI;
 
 		float drip_alpha = 4;
 		int drip_version = 0; // 1 : \phi_x \ phi_z     else : \phi_z \ norm()
