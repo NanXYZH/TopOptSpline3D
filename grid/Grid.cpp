@@ -2094,7 +2094,13 @@ void grid::HierarchyGrid::writeSensitivity(const std::string& filename)
 	}
 	
 	openvdb_wrapper_t<float>::grid2openVDBfile(filename, epos, evalue);
+}
 
+void grid::HierarchyGrid::writeCSens(const std::string& filename, float* dev_ptr, size_t n)
+{
+	std::vector<float> csenshost(n);
+	gpu_manager_t::download_buf(csenshost.data(), dev_ptr, sizeof(float) * n);
+	bio::write_vector(filename, csenshost);
 }
 
 void grid::HierarchyGrid::readCoeff(const std::string& filename)

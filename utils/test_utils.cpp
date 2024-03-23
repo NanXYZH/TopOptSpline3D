@@ -1262,7 +1262,7 @@ void TestSuit::testRobustSplineMMA(void)
 
 	int itn = 0;
 
-	snippet::converge_criteria stop_check(1, 5, 1e-4);
+	snippet::converge_criteria stop_check(1, 5, 1e-3);
 
 	std::vector<double> cRecord, volRecord, ssRecord, dripRecord;
 	double* con_value;
@@ -1281,7 +1281,7 @@ void TestSuit::testRobustSplineMMA(void)
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float sensScale = 1e6;
+	float sensScale = 1e4;
 	float volScale = 1e3;
 	float SSScale = 1e3;
 	float dripScale = 1e5;
@@ -1296,7 +1296,7 @@ void TestSuit::testRobustSplineMMA(void)
 		gdiff[i] = gdiffval[i].data();
 	}
 
-	while (itn++ < 400) {
+	while (itn++ < 100) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
 
 		Vgoal *= (1 - params.volume_decrease);
@@ -1327,6 +1327,8 @@ void TestSuit::testRobustSplineMMA(void)
 
 		double ss_value = 0.0;
 		double drip_value = 0.0;
+		initSSCSens(float{ 0 });
+		initDripCSens(float{ 0 });
 
 		// update numeric stencil after density changed
 		update_stencil();
@@ -1358,28 +1360,28 @@ void TestSuit::testRobustSplineMMA(void)
 		{
 			if (itn > 160)
 			{
-				sensScale = 1e7;
+				//sensScale = 1e5;
 				SSScale = 1e4;
-				dripScale = 1e8;
+				dripScale = 1e9;
 			}
 			else if (itn > 120)
 			{
-				sensScale = 1e7;
+				//sensScale = 1e5;
 				SSScale = 1e4;
 				dripScale = 1e8;
 			}
 			else if (itn > 80)
 			{
-				sensScale = 1e7;
+				//sensScale = 1e5;
 				SSScale = 1e4;
-				dripScale = 1e8;
+				dripScale = 1e7;
 			}
 			else if (itn > 40)
 			{
-				sensScale = 1e7;
+				//sensScale = 1e5;
 				volScale = volScale;
 				SSScale = 1e4;
-				dripScale = 1e7;
+				dripScale = 1e6;
 
 			}
 			std::cout << "\033[34m-- [Deal with surface points] --\033[0m" << std::endl;
@@ -1397,7 +1399,7 @@ void TestSuit::testRobustSplineMMA(void)
 
 		printf("-- c_worst = %6.4e  v = %4.3lf \n", c_worst, vol);
 		if (isnan(c_worst) || abs(c_worst) < 1e-11) { printf("\033[31m-- Error compliance\033[0m\n"); exit(-1); }
-		cRecord.emplace_back(c_worst); volRecord.emplace_back(Vgoal);  ssRecord.emplace_back(ss_value); dripRecord.emplace_back(drip_value);
+		cRecord.emplace_back(c_worst); volRecord.emplace_back(vol);  ssRecord.emplace_back(ss_value); dripRecord.emplace_back(drip_value);
 		if (stop_check.update(c_worst, con_value) && Vgoal <= params.volume_ratio) break;
 		grids.log(itn);
 		// compute adjoint variables
@@ -1419,6 +1421,14 @@ void TestSuit::testRobustSplineMMA(void)
 		gpu_manager_t::pass_dev_buf_to_matlab("volcsensscale", grids[0]->getVolCSens(), grids[0]->n_cijk());
 		gpu_manager_t::pass_dev_buf_to_matlab("sscsensscale", grids[0]->getSSCSens(), grids[0]->n_cijk());
 		gpu_manager_t::pass_dev_buf_to_matlab("dripcsensscale", grids[0]->getDripCSens(), grids[0]->n_cijk());
+
+		if (itn % 10 == 0)
+		{
+			grids.writeCSens(grids.getPath(snippet::formated("csens%d", itn)), grids[0]->getCSens(), grids[0]->n_cijk());
+			grids.writeCSens(grids.getPath(snippet::formated("volcsens%d", itn)), grids[0]->getVolCSens(), grids[0]->n_cijk());
+			grids.writeCSens(grids.getPath(snippet::formated("sscsens%d", itn)), grids[0]->getSSCSens(), grids[0]->n_cijk());
+			grids.writeCSens(grids.getPath(snippet::formated("dripcsens%d", itn)), grids[0]->getDripCSens(), grids[0]->n_cijk());
+		}
 
 		gdiff[0] = grids[0]->getVolCSens();
 		gval[0] = volScale * (vol - params.volume_ratio);                 // corrected !!!
@@ -1451,10 +1461,12 @@ void TestSuit::testRobustSplineMMA(void)
 			grids.writeSensitivity(grids.getPath("sens.vdb"));
 		}
 
+	
 		bio::write_vector(grids.getPath("crec_iter"), cRecord);
 		bio::write_vector(grids.getPath("vrec_iter"), volRecord);
 		bio::write_vector(grids.getPath("ssrec_iter"), ssRecord);
 		bio::write_vector(grids.getPath("driprec_iter"), dripRecord);
+		bio::write_vector(grids.getPath("trec_iter"), tRecord);
 	}
 
 	printf("\n=   finished   =\n");

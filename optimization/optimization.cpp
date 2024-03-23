@@ -737,6 +737,10 @@ void optimization(void) {
 		// update density
 		updateDensities(Vgoal);
 
+		bio::write_vector(grids.getPath("crec_iter"), cRecord);
+		bio::write_vector(grids.getPath("vrec_iter"), volRecord);
+		bio::write_vector(grids.getPath("trec_iter"), tRecord);
+
 		// DEBUG
 		if (itn % 5 == 0) {
 			grids.writeDensity(grids.getPath("out.vdb"));

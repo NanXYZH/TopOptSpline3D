@@ -29,6 +29,33 @@ int main(int argc, char** argv)
 	}
 	else {
 		std::cout << "Usage: your_program.exe <file_path>" << std::endl;
+		std::string filenamev = "D:/[4]robustspline/result/lbeam/robsplinemma58/volcsens2";
+
+		std::vector<float> volRecord;
+
+		bool suc = bio::read_vector(filenamev, volRecord);
+		if (!suc) {
+			printf("\033[31mFailed to open file %s \n\033[0m", filenamev.c_str());
+			throw std::runtime_error("error open file");
+		}
+		else
+		{
+			std::cout << volRecord.size() << std::endl;
+			double sum_ = 0;
+			int count_ = 0;
+			for (int i = 0; i < volRecord.size(); i++)
+			{
+				sum_ = sum_ + volRecord[i];
+				if (volRecord[i] == 0)
+					count_++;
+				if (i < 100)
+				{
+					printf("--  count = %2d  v = %9.6lf \n", i + 1, volRecord[i]);
+				}				
+			}
+			std::cout << count_ << ", " << sum_ << std::endl;
+		}
+
 		//return 1;
 	}
 	//// ÎÄ¼þÂ·¾¶

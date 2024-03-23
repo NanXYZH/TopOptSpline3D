@@ -1,7 +1,7 @@
 ﻿  main.cpp
   正在生成代码
-  1 of 199 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    0 functions had inline decision re-evaluated but remain unchanged
+  39 of 237 functions (16.5%) were compiled, the rest were copied from previous compilation.
+    38 functions were new in current compilation
+    22 functions had inline decision re-evaluated but remain unchanged
   已完成代码的生成
   read_data.vcxproj -> D:\robtop-main\build\x64\Release\read_data.exe

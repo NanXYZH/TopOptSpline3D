@@ -996,6 +996,8 @@ namespace grid {
 
 		void writeForce(const std::string& filename); // Add
 
+		void writeCSens(const std::string& filename, float* dev_ptr, size_t n);
+
 		void getNodePos(Grid& g, std::vector<double>& p3host);
 
 		void getElementPos(Grid& g, std::vector<double>& p3host);
