@@ -3997,7 +3997,7 @@ void Grid::generate_spline_surface_nodes(float beta)
 	//{
 	//	cur_ereso = _ereso;
 	//}
-	std::cout << "Element Resolution for marching cube ----- " << cur_ereso << std::endl;
+	
 	compute_background_mcPoints_value(bgnodex, bgnodey, bgnodez, mcPoints_val, cur_ereso, beta);
 
 	std::vector<float> bgnode[3];
@@ -4015,14 +4015,19 @@ void Grid::generate_spline_surface_nodes(float beta)
 
 	int N[3] = { cur_ereso + 2, cur_ereso + 2, cur_ereso + 2 };
 	// MARK[TOCHECK] sometime crash in mc points generation
+			// solve worst displacement by modified power method
+	auto t0 = tictoc::getTag();
 	generate_surface_nodes_by_MC(_meshfile, N, spline_surface_node[0], spline_surface_node[1], spline_surface_node[2], bgnode, mcPoints_val);
+	auto t1 = tictoc::getTag();
+	double time_tmp =  tictoc::Duration<tictoc::ms>(t0, t1);
+	std::cout << "Element Resolution for marching cube ----- " << cur_ereso << "----- Time: " << time_tmp << "ms" << std::endl;
 	std::cout << "spline surface node number (after marching cube): " << spline_surface_node->size() << std::endl;
 
 	compute_surface_nodes_in_model(spline_surface_node[0], spline_surface_node[1], spline_surface_node[2]);
 	std::cout << "spline surface node number (in model): " << spline_surface_node->size() << std::endl;
 
 #ifdef ENABLE_MATLAB
-	pass_spline_surf_node2matlab();
+	//pass_spline_surf_node2matlab();
 #endif
 }
 

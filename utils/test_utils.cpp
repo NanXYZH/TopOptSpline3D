@@ -1262,7 +1262,7 @@ void TestSuit::testRobustSplineMMA(void)
 
 	int itn = 0;
 
-	snippet::converge_criteria stop_check(1, 5, 1e-3);
+	snippet::converge_criteria stop_check(1, 5, 5e-4);
 
 	std::vector<double> cRecord, volRecord, ssRecord, dripRecord;
 	double* con_value;
@@ -1281,7 +1281,7 @@ void TestSuit::testRobustSplineMMA(void)
 	// MMA
 	MMA::mma_t mma(grids[0]->n_cijk(), n_constraint);
 	mma.init(params.min_cijk, 1);
-	float sensScale = 1e4;
+	float sensScale = 1e6;
 	float volScale = 1e3;
 	float SSScale = 1e3;
 	float dripScale = 1e5;
@@ -1296,7 +1296,7 @@ void TestSuit::testRobustSplineMMA(void)
 		gdiff[i] = gdiffval[i].data();
 	}
 
-	while (itn++ < 100) {
+	while (itn++ < 200) {
 		printf("\n* \033[32mITER %d \033[0m*\n", itn);
 
 		Vgoal *= (1 - params.volume_decrease);
