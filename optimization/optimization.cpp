@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include "mma_t.h"
 
-
 gpu_manager_t gpu_manager;
 
 grid::HierarchyGrid grids(gpu_manager);
