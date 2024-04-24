@@ -13,9 +13,7 @@ extern void version_info(void);
 std::string version_hash(void);
 extern void init_cuda(void);
 
-
 config_parser_t parser;
-
 
 int main(int argc, char** argv)
 {
