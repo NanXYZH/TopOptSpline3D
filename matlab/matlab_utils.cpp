@@ -8,7 +8,7 @@ using namespace Eigen;
 
 MatlabEngine gMatEngine;
 
-// Matlab engine
+// Matlab engine 
 #pragma comment(lib, "libeng.lib")
 #pragma comment(lib, "libmx.lib")
 
