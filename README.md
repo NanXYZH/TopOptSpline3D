@@ -1,4 +1,4 @@
-# Topology Optimization of Self-supporting Structures for Additive Manufacturing using Implicit B-splines Representation
+# Topology Optimization of Self-Supporting Structures for Additive Manufacturing Via Implicit B-Spline Representations
 
 
 
